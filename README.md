@@ -4,17 +4,17 @@
 
 - 対象Wiki: https://w.atwiki.jp/siroi_human/
 - Author: argyi
-- Version: 1.1.0
+- Version: 1.1.1
 
 ## @wikiへの設置
 
 検索ページを「管理者のみ編集可能」に設定し、本文へ次の1行を記述してください。
 
 ```text
-#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@aeefbf7bc5bed3be4d6f3a889613712024d48042/Ra_FGOEffectFilter.js)
+#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@fcf68e035a2111f33ac6ca6de5efcbd5fb9befda/Ra_FGOEffectFilter.js)
 ```
 
-`@main` はCDNキャッシュにより更新が遅れる場合があるため、v1.1.0では動作確認済みコミットを直接指定します。
+`@main` はCDNキャッシュにより更新が遅れる場合があるため、動作確認済みコミットを直接指定します。
 
 初回は画面上の「データ読込」を押してください。個別サーヴァントページから保有スキル・宝具・クラススキルを読み取り、ブラウザへ24時間キャッシュします。
 
@@ -40,6 +40,11 @@
 - 検索条件として指定した効果行を強調表示
 
 ## 更新履歴
+
+### v1.1.1
+
+- 「NPを最大まで増やす」を「NP増加」の検索対象に追加
+- v1.1.0のキャッシュを自動的に更新対象とし、再解析時に新しいNP増加判定を反映
 
 ### v1.1.0
 
