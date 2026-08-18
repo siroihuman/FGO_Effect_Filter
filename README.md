@@ -11,7 +11,7 @@
 検索ページを「管理者のみ編集可能」に設定し、本文へ次の1行を記述してください。
 
 ```text
-#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@main/Ra_FGOEffectFilter.js)
+#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@main/Ra_FGOEffectFilter.js?v=1.1.0)
 ```
 
 初回は画面上の「データ読込」を押してください。個別サーヴァントページから保有スキル・宝具・クラススキルを読み取り、ブラウザへ24時間キャッシュします。
