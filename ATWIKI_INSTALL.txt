@@ -36,9 +36,12 @@ https://w.atwiki.jp/siroi_human/pages/54.html のサーヴァント一覧を起�
 
 (3) ページ本文に次の1行を記述します。
 
-#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@main/Ra_FGOEffectFilter.js?v=1.1.0)
+#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@aeefbf7bc5bed3be4d6f3a889613712024d48042/Ra_FGOEffectFilter.js)
 
-※ 上記URLはこのリポジトリの main ブランチ上にある Ra_FGOEffectFilter.js を jsDelivr 経由で読み込みます。
+※ v1.1.0では jsDelivr の @main キャッシュによって旧版が残る問題を避けるため、
+   動作確認済みコミットを直接指定しています。
+※ 以前の @main/Ra_FGOEffectFilter.js または ?v=1.1.0 付きURLを使っている場合は、
+   上記1行へ置き換えてページを保存してください。
 
 ========================================
 3. 最初の使い方
@@ -124,6 +127,7 @@ v1.1.0
 - 宝具名表示を追加
 - クラススキル名表示を改善
 - キャッシュ形式を更新
+- @wiki読込URLをコミット固定に変更し、jsDelivrの@mainキャッシュ問題を回避
 
 v1.0.0
 - 初版
