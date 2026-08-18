@@ -1,10 +1,10 @@
 /*
  * Ra_FGOEffectFilter.js
  * @wiki / siroi_human 用 FGOスキル・宝具効果検索 bootstrap
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: argyi
  *
- * 本体は tools/Ra_FGOEffectFilter.js.gz.b64 にgzip+Base64で保持し、
+ * 本体は tools/Ra_FGOEffectFilter.v1.1.0.js.gz.b64 にgzip+Base64で保持し、
  * 読込時にブラウザ上で展開して実行します。
  */
 (() => {
@@ -14,12 +14,12 @@
   window.__RA_FGO_EFFECT_FILTER_BOOTSTRAP__ = true;
 
   const current = document.currentScript;
-  const FALLBACK_PAYLOAD = 'https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@main/tools/Ra_FGOEffectFilter.js.gz.b64';
+  const FALLBACK_PAYLOAD = 'https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@main/tools/Ra_FGOEffectFilter.v1.1.0.js.gz.b64';
 
   function payloadUrl() {
     try {
       const src = current?.src || '';
-      if (src) return new URL('tools/Ra_FGOEffectFilter.js.gz.b64', src).href;
+      if (src) return new URL('tools/Ra_FGOEffectFilter.v1.1.0.js.gz.b64', src).href;
     } catch (_) {}
     return FALLBACK_PAYLOAD;
   }
