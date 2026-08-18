@@ -36,7 +36,7 @@ https://w.atwiki.jp/siroi_human/pages/54.html のサーヴァント一覧を起�
 
 (3) ページ本文に次の1行を記述します。
 
-#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@main/Ra_FGOEffectFilter.js)
+#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@main/Ra_FGOEffectFilter.js?v=1.1.0)
 
 ※ 上記URLはこのリポジトリの main ブランチ上にある Ra_FGOEffectFilter.js を jsDelivr 経由で読み込みます。
 
