@@ -11,8 +11,10 @@
 検索ページを「管理者のみ編集可能」に設定し、本文へ次の1行を記述してください。
 
 ```text
-#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@main/Ra_FGOEffectFilter.js?v=1.1.0)
+#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@aeefbf7bc5bed3be4d6f3a889613712024d48042/Ra_FGOEffectFilter.js)
 ```
+
+`@main` はCDNキャッシュにより更新が遅れる場合があるため、v1.1.0では動作確認済みコミットを直接指定します。
 
 初回は画面上の「データ読込」を押してください。個別サーヴァントページから保有スキル・宝具・クラススキルを読み取り、ブラウザへ24時間キャッシュします。
 
@@ -49,6 +51,7 @@
 - 宝具名の抽出・表示を追加
 - クラススキルを表単位で解析し、クラススキル名を表示するよう改善
 - 倍率データ対応のためキャッシュ形式を更新
+- jsDelivrのブランチキャッシュ対策として@wiki読込URLをコミット固定に変更
 
 ### v1.0.0
 
