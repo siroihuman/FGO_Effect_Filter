@@ -1,11 +1,11 @@
 /*
  * Ra_FGOEffectFilter.js
  * @wiki / siroi_human 用 FGOスキル・宝具効果検索 bootstrap
- * Version: 1.1.0
+ * Version: 1.1.1
  * Author: argyi
  *
- * v1.1.0 本体は tools/v1.1.0/chunks/ 以下のBase64分割ファイルに
- * gzip圧縮して保持し、読込時にブラウザ上で結合・展開して実行します。
+ * v1.1.0 本体を読み込み、v1.1.1差分（NP最大増加の同義語対応）を
+ * 起動時に適用して実行します。
  */
 (() => {
   'use strict';
@@ -38,6 +38,20 @@
     else (document.querySelector('#content,main,.atwiki-page-body,.wiki-body,.atwiki-body') || document.body).appendChild(box);
   }
 
+  function applyV111Patch(code) {
+    const oldDefinition = "['np_charge','NP増加',/NP(?:を)?増やす|NP(?:を)?増加|NPチャージ/i]";
+    const newDefinition = "['np_charge','NP増加',/NP(?:を)?(?:最大まで)?増やす|NP(?:を)?増加|NPチャージ/i]";
+
+    if (!code.includes(oldDefinition)) {
+      throw new Error('NP増加検索定義の更新に失敗しました。');
+    }
+
+    return code
+      .replace(oldDefinition, newDefinition)
+      .replace(' * Version: 1.1.0', ' * Version: 1.1.1')
+      .replace("const VERSION = '1.1.0';", "const VERSION = '1.1.1';");
+  }
+
   async function boot() {
     try {
       if (typeof DecompressionStream !== 'function') {
@@ -62,10 +76,15 @@
 
       const compressed = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
       const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip'));
-      const code = await new Response(stream).text();
+      const baseCode = await new Response(stream).text();
 
-      if (!/Version:\s*1\.1\.0/.test(code)) {
+      if (!/Version:\s*1\.1\.0/.test(baseCode)) {
         throw new Error('本体バージョンの検証に失敗しました。');
+      }
+
+      const code = applyV111Patch(baseCode);
+      if (!/Version:\s*1\.1\.1/.test(code) || !/NP\(\?:を\)\?\(\?:最大まで\)\?増やす/.test(code)) {
+        throw new Error('v1.1.1差分の検証に失敗しました。');
       }
 
       const script = document.createElement('script');
