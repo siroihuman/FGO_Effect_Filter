@@ -6,8 +6,8 @@ Author: argyi
 ========================================
 テスト用の@wikiページを「管理者のみ編集可能」に設定し、本文へ次の2行を記述してください。
 
-#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@242f8ac3a85dbf281d8a4c0dff0f521d51bc09cd/Ra_FGOTraitFilter.js)
-#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@242f8ac3a85dbf281d8a4c0dff0f521d51bc09cd/Ra_FGOTraitOrder.js)
+#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@92f67329d299c338b1bf439e05cdd19ff70c19f5/Ra_FGOTraitFilter.js)
+#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@92f67329d299c338b1bf439e05cdd19ff70c19f5/Ra_FGOTraitOrder.js)
 
 1行目が動作確認済みの特性検索本体、2行目が特性表示順だけを変更する補助モジュールです。
 表示順データは `data/trait_display_order.txt` から読み込みます。
@@ -56,5 +56,6 @@ Author: argyi
 ========================================
 特性検索本体 `Ra_FGOTraitFilter.js` は、@wiki上で正常表示を確認できた構成を維持しています。
 表示順処理は `Ra_FGOTraitOrder.js` に分離しているため、並び順側に問題があっても検索本体のデータ取得・検索処理へ影響しにくい構成です。
+表示順補助は既存本体で使用している一般的なDOM・fetch系処理に寄せ、独自のDOM監視APIは使用していません。
 
 既存の `Ra_FGOEffectFilter.js` は変更していないため、スキル効果検索とはまだ別画面です。
