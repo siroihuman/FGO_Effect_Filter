@@ -12,7 +12,7 @@
 検索ページを「管理者のみ編集可能」に設定し、本文へ次の1行を記述してください。
 
 ```text
-#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@ae43fe2bccc3bee937057e9644d98e3b523d4469/Ra_FGOEffectFilter.js)
+#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@bb4116b7dee97d828c9cd7afdf144ff43bfbe9c2/Ra_FGOEffectFilter.js)
 ```
 
 `@main` はCDNキャッシュにより更新が遅れる場合があるため、動作確認済みコミットを直接指定します。
