@@ -10,7 +10,7 @@
   window.__RA_FGO_TRAIT_ORDER__ = true;
 
   const current = document.currentScript;
-  const fallback = 'https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@feature/trait-filter-foundation/data/trait_display_order.txt';
+  const fallback = 'https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@main/data/trait_display_order.txt';
   let order = [];
   let watchTimer = 0;
 
@@ -33,9 +33,9 @@
     return a.localeCompare(b, 'ja');
   }
 
-  function sortTraits() {
+  function sortRoot(rootId) {
     if (!order.length) return;
-    const root = document.getElementById('ra-fgo-trait-filter');
+    const root = document.getElementById(rootId);
     if (!root) return;
 
     const inputs = Array.from(root.querySelectorAll('input[type="checkbox"][value]'));
@@ -56,16 +56,12 @@
       return compareNames(ai ? ai.value : '', bi ? bi.value : '');
     });
 
-    let changed = false;
-    for (let i = 0; i < labels.length; i += 1) {
-      if (labels[i] !== sorted[i]) {
-        changed = true;
-        break;
-      }
-    }
-    if (!changed) return;
-
     sorted.forEach(label => box.appendChild(label));
+  }
+
+  function sortTraits() {
+    sortRoot('ra-fgo-trait-filter');
+    sortRoot('ra-fgo-combined-search');
   }
 
   function stopWatch() {
@@ -76,45 +72,37 @@
 
   function startWatch() {
     stopWatch();
-    watchTimer = setInterval(() => {
-      const root = document.getElementById('ra-fgo-trait-filter');
-      if (!root) return;
+    watchTimer = setInterval(sortTraits, 250);
+    setTimeout(stopWatch, 5000);
+  }
 
-      sortTraits();
-
-      const text = root.textContent || '';
-      if (text.includes('読込完了：') || text.includes('キャッシュ読込済み：') || text.includes('読込失敗：')) {
-        stopWatch();
-      }
-    }, 250);
+  function attachRoot(root) {
+    if (!root || root.dataset.raTraitOrderAttached === '1') return;
+    root.dataset.raTraitOrderAttached = '1';
+    root.addEventListener('input', () => setTimeout(sortTraits, 0));
+    root.addEventListener('click', () => setTimeout(sortTraits, 0));
   }
 
   function attach() {
-    const root = document.getElementById('ra-fgo-trait-filter');
-    if (!root) {
-      setTimeout(attach, 100);
-      return;
-    }
-
-    root.addEventListener('input', () => setTimeout(sortTraits, 0));
-    root.addEventListener('click', event => {
-      const target = event.target;
-      const text = target && target.textContent ? target.textContent : '';
-      if (text === 'データ読込' || text === '再読込') startWatch();
-      else setTimeout(sortTraits, 0);
-    });
-
+    attachRoot(document.getElementById('ra-fgo-trait-filter'));
+    attachRoot(document.getElementById('ra-fgo-combined-search'));
     sortTraits();
   }
 
   fetch(dataUrl(), { cache: 'no-cache' })
     .then(response => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) throw new Error('HTTP ' + response.status);
       return response.text();
     })
     .then(text => {
       order = text.split(/\r?\n/).map(v => v.trim()).filter(Boolean);
+      window.RaFGOTraitOrder = Object.freeze({
+        compareNames,
+        sort: sortTraits,
+        getOrder: () => order.slice()
+      });
       attach();
+      startWatch();
     })
     .catch(error => console.warn('[Ra_FGOTraitOrder] 表示順データを読み込めませんでした。', error));
 })();
