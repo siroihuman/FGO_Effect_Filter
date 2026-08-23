@@ -4,7 +4,7 @@
  * Author: argyi
  *
  * 個別サーヴァントページの「特性」欄を正本として読み込みます。
- * 「各特性持ち編集」ページは参照しません。
+ * 「各特性持ち編集」ページはデータソースには使わず、特性の表示順のみ参考にします。
  */
 (() => {
   'use strict';
@@ -12,9 +12,8 @@
   if (window.__RA_FGO_TRAIT_FILTER__) return;
   window.__RA_FGO_TRAIT_FILTER__ = true;
 
-  const MODULE_VERSION = '0.1.0';
+  const MODULE_VERSION = '0.1.1';
   const WIKI_ORIGIN = 'https://w.atwiki.jp';
-  const WIKI_ROOT = '/siroi_human/';
   const INDEX_PATH = '/siroi_human/pages/54.html';
   const CACHE_KEY = `ra_fgo_trait_filter_${MODULE_VERSION}`;
   const CACHE_TTL = 24 * 60 * 60 * 1000;
@@ -29,6 +28,36 @@
   };
 
   const RARITY_BY_COLUMN = { 1: 1, 2: 2, 3: 3, 4: 4, 5: 5 };
+
+  // /pages/427.html の「各特性持ち編集」に合わせた表示優先順。
+  // この配列は表示順専用であり、特性データの正本には使用しない。
+  const TRAIT_DISPLAY_ORDER = [
+    // 基本
+    'サーヴァント', '人型', '男性', '女性', '性別不明', 'ギリシャ神話系男性',
+    // 属性
+    '秩序', '中立', '混沌', '善', '中庸', '悪', '狂', '星', '獣', '夏', '花嫁',
+    '天の力', '地の力', '人の力', '星の力', '獣の力',
+    // 通常クラス
+    'セイバー', 'アーチャー', 'ランサー', 'ライダー', 'キャスター', 'アサシン', 'バーサーカー',
+    // Exクラス
+    'シールダー', 'ルーラー', 'アヴェンジャー', 'ムーンキャンサー', 'アルターエゴ', 'フォーリナー', 'プリテンダー', 'ビースト',
+    // クラススキル1
+    '対魔力', '単独行動', '騎乗', '道具作成', '陣地作成', '気配遮断', '狂化',
+    // クラススキル2
+    '神性', '復讐者', '忘却補正', '自己回復（魔力）', '領域外の生命',
+    // 通常特性1
+    'ヒト科', 'ヒト科以外', 'ケモノ科', '魔獣型', '妖精', '悪魔', '魔性', '機械', '竜', '鬼', '猛獣',
+    // 通常特性2
+    '超巨大', '巨人', '王', '愛する者', '叛逆する者', '人類の脅威', 'クトゥルフ', '対人', '炎',
+    // 特殊特性1
+    '低レア', 'アルトリア顔', 'アーサー', 'イリヤ', '信長', '源氏', '初代ローマ皇帝', 'ローマ',
+    'イギリスゆかりの者', 'アルゴー号ゆかりの者', '円卓の騎士', '新選組のサーヴァント',
+    // 特殊特性2
+    '子供のサーヴァント', '童話', '四季・協奏曲', '霊衣を持つ者', '夏モード', '今を生きる人類', 'ｴﾇﾏ特攻無効',
+    // エネミー特性
+    'シャドウサーヴァント', '死霊', '戦士', '人間'
+  ];
+  const TRAIT_ORDER_INDEX = new Map(TRAIT_DISPLAY_ORDER.map((name, index) => [name, index]));
 
   const state = {
     servants: [],
@@ -50,6 +79,13 @@
       .replace(/[（(][^）)]*[）)]\s*$/, '')
       .replace(/[［\[][^］\]]*[］\]]\s*$/, '')
       .trim();
+  }
+
+  function compareTraitNames(a, b) {
+    const aIndex = TRAIT_ORDER_INDEX.has(a) ? TRAIT_ORDER_INDEX.get(a) : Number.MAX_SAFE_INTEGER;
+    const bIndex = TRAIT_ORDER_INDEX.has(b) ? TRAIT_ORDER_INDEX.get(b) : Number.MAX_SAFE_INTEGER;
+    if (aIndex !== bIndex) return aIndex - bIndex;
+    return a.localeCompare(b, 'ja');
   }
 
   function parseTraitToken(token) {
@@ -209,7 +245,7 @@
 
   function getAllTraitNames() {
     return [...new Set(state.servants.flatMap(s => s.traits.map(t => t.name)))]
-      .sort((a, b) => a.localeCompare(b, 'ja'));
+      .sort(compareTraitNames);
   }
 
   function servantHasTrait(servant, trait) {
@@ -423,6 +459,7 @@
     load: loadData,
     getServants: () => state.servants.map(servant => ({ ...servant, traits: servant.traits.map(t => ({ ...t })) })),
     getTraitNames: getAllTraitNames,
-    normalizeTraitName
+    normalizeTraitName,
+    compareTraitNames
   });
 })();
