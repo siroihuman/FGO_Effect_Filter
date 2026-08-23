@@ -34,17 +34,6 @@
     return new URL(path, FALLBACK_BASE).href;
   }
 
-  function applyV131TraitLayoutFix(code) {
-    const from = "      const category = canonicalTraitCategory(catalogMap.get(trait) || fallbackTraitCategory(trait));";
-    const to = [
-      "      let category = canonicalTraitCategory(catalogMap.get(trait) || fallbackTraitCategory(trait));",
-      "      if (trait === '夏モード' || trait === '霊衣を持つ者') category = '特殊特性２';",
-      "      if (trait === 'ヒト科以外') category = canonicalTraitCategory(catalogMap.get('ヒト科') || category);"
-    ].join('\n');
-    if (!code.includes(from)) throw new Error('特性カテゴリ固定処理の適用に失敗しました。');
-    return code.replace(from, to);
-  }
-
   function showError(error) {
     console.error('[Ra_FGOEffectFilter] 起動に失敗しました。', error);
     const box = document.createElement('div');
@@ -78,8 +67,7 @@
 
       const compressed = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
       const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip'));
-      const baseCode = await new Response(stream).text();
-      const code = applyV131TraitLayoutFix(baseCode);
+      const code = await new Response(stream).text();
 
       if (!/Version:\s*1\.3\.1/.test(code) || !/const VERSION = '1\.3\.1';/.test(code)) {
         throw new Error('本体バージョンの検証に失敗しました。');
