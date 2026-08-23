@@ -1,7 +1,7 @@
 /*
  * Ra_FGOEffectFilter.js
  * @wiki / siroi_human 用 FGOスキル・宝具・特性検索 bootstrap
- * Version: 1.3.0
+ * Version: 1.3.1
  * Author: argyi
  */
 (() => {
@@ -13,18 +13,15 @@
   const current = document.currentScript;
   const FALLBACK_BASE = 'https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@main/';
   const PART_PATHS = [
-    'tools/v1.3.0/chunks/p00.b64',
-    'tools/v1.3.0/chunks/p01.b64',
-    'tools/v1.3.0/chunks/p02.b64',
-    'tools/v1.3.0/chunks/p03.b64',
-    'tools/v1.3.0/chunks/p04.b64',
-    'tools/v1.3.0/chunks/p05_08.b64',
-    'tools/v1.3.0/chunks/p09_12.b64',
-    'tools/v1.3.0/chunks/p13_16.b64',
-    'tools/v1.3.0/chunks/p17_20.b64',
-    'tools/v1.3.0/chunks/p21_24.b64'
+    'tools/v1.3.1/chunks/p00.b64',
+    'tools/v1.3.1/chunks/p01.b64',
+    'tools/v1.3.1/chunks/p02.b64',
+    'tools/v1.3.1/chunks/p03.b64',
+    'tools/v1.3.1/chunks/p04.b64',
+    'tools/v1.3.1/chunks/p05.b64',
+    'tools/v1.3.1/chunks/p06.b64'
   ];
-  const EXPECTED_BASE64_LENGTH = 24132;
+  const EXPECTED_BASE64_LENGTH = 25344;
 
   function assetUrl(path) {
     try {
@@ -69,7 +66,7 @@
       const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip'));
       const code = await new Response(stream).text();
 
-      if (!/Version:\s*1\.3\.0/.test(code) || !/const VERSION = '1\.3\.0';/.test(code)) {
+      if (!/Version:\s*1\.3\.1/.test(code) || !/const VERSION = '1\.3\.1';/.test(code)) {
         throw new Error('本体バージョンの検証に失敗しました。');
       }
 
