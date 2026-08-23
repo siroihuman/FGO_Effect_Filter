@@ -6,7 +6,7 @@ Author: argyi
 ========================================
 既存の効果検索ページ・特性検索ページとは別のテスト用@wikiページを「管理者のみ編集可能」に設定し、本文へ次の1行だけを記述してください。
 
-#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@7983e8a1af5473aba9fb316f0651723083939cec/Ra_FGOUnifiedFilter.js)
+#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@187115f89438db15331eaf3583779ae40a39824d/Ra_FGOUnifiedFilter.js)
 
 ========================================
 2. 今回の確認手順
