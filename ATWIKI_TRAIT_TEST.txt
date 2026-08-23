@@ -2,18 +2,17 @@ Ra_FGOTraitFilter 開発版テスト手順
 Author: argyi
 
 ========================================
-1. 設置
+1. 現在の動作確認済み版
 ========================================
 テスト用の@wikiページを「管理者のみ編集可能」に設定し、本文へ次の2行を記述してください。
 
 #include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@92f67329d299c338b1bf439e05cdd19ff70c19f5/Ra_FGOTraitFilter.js)
 #include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@92f67329d299c338b1bf439e05cdd19ff70c19f5/Ra_FGOTraitOrder.js)
 
-1行目が動作確認済みの特性検索本体、2行目が特性表示順だけを変更する補助モジュールです。
-表示順データは `data/trait_display_order.txt` から読み込みます。
+この2本構成は@wiki上で正常表示を確認済みです。
 
 ========================================
-2. 確認手順
+2. 動作確認済み版の確認項目
 ========================================
 1. ページを保存して開く
 2. `include_js plugin Error` が出ないことを確認
@@ -59,3 +58,30 @@ Author: argyi
 表示順補助は既存本体で使用している一般的なDOM・fetch系処理に寄せ、独自のDOM監視APIは使用していません。
 
 既存の `Ra_FGOEffectFilter.js` は変更していないため、スキル効果検索とはまだ別画面です。
+
+========================================
+6. 次段階: 共通データ基盤利用版テスト
+========================================
+効果検索との統合準備として、サーヴァント一覧取得・個別ページ取得・キャッシュ処理を `Ra_FGODataCore.js` へ分離した候補版を用意しています。
+
+この確認は、上記の動作確認済み版とは別のテストページで行ってください。
+本文へ次の3行を記述します。
+
+#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@ba33e0db62517704c323ea6fec68108c080b6653/Ra_FGODataCore.js)
+#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@ba33e0db62517704c323ea6fec68108c080b6653/Ra_FGOTraitFilterCore.js)
+#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@ba33e0db62517704c323ea6fec68108c080b6653/Ra_FGOTraitOrder.js)
+
+画面上部の説明に `共通データ基盤版 0.2.0-dev` と表示されれば候補版です。
+
+確認項目:
+1. `include_js plugin Error` が出ない
+2. 「サーヴァント特性検索」が表示される
+3. `共通データ基盤版 0.2.0-dev` と表示される
+4. 「データ読込」が完走する
+5. 読込騎数・特性数が動作確認済み版と一致する
+6. 特性の表示順が動作確認済み版と同じ
+7. AND / OR検索が同じ結果になる
+8. クラス・レアリティ・名前検索が同じ結果になる
+9. 個別ページリンクが正常に開く
+
+この候補版の確認が完了したら、特性検索側の共通基盤移行を確定し、次に既存効果検索側を同じ `RaFGODataCore` へ移行します。
