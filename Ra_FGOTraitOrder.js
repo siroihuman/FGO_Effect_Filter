@@ -15,9 +15,7 @@
   let watchTimer = 0;
 
   function dataUrl() {
-    try {
-      if (current && current.src) return new URL('data/trait_display_order.txt', current.src).href;
-    } catch (_) {}
+    try { if (current && current.src) return new URL('data/trait_display_order.txt', current.src).href; } catch (_) {}
     return fallback;
   }
 
@@ -27,8 +25,7 @@
   }
 
   function compareNames(a, b) {
-    const ar = rank(a);
-    const br = rank(b);
+    const ar = rank(a), br = rank(b);
     if (ar !== br) return ar - br;
     return a.localeCompare(b, 'ja');
   }
@@ -37,44 +34,28 @@
     if (!order.length) return;
     const root = document.getElementById(rootId);
     if (!root) return;
-
     const inputs = Array.from(root.querySelectorAll('input[type="checkbox"][value]'));
     if (inputs.length < 2) return;
-
     const firstLabel = inputs[0].parentNode;
     const box = firstLabel && firstLabel.parentNode;
     if (!box) return;
-
-    const labels = Array.from(box.children).filter(node => {
-      return node.querySelector && node.querySelector('input[type="checkbox"][value]');
-    });
+    const labels = Array.from(box.children).filter(node => node.querySelector && node.querySelector('input[type="checkbox"][value]'));
     if (labels.length < 2) return;
-
-    const sorted = labels.slice().sort((a, b) => {
+    labels.slice().sort((a, b) => {
       const ai = a.querySelector('input[type="checkbox"][value]');
       const bi = b.querySelector('input[type="checkbox"][value]');
       return compareNames(ai ? ai.value : '', bi ? bi.value : '');
-    });
-
-    sorted.forEach(label => box.appendChild(label));
+    }).forEach(label => box.appendChild(label));
   }
 
   function sortTraits() {
     sortRoot('ra-fgo-trait-filter');
     sortRoot('ra-fgo-combined-search');
+    sortRoot('ra-fgo-combined-advanced');
   }
 
-  function stopWatch() {
-    if (!watchTimer) return;
-    clearInterval(watchTimer);
-    watchTimer = 0;
-  }
-
-  function startWatch() {
-    stopWatch();
-    watchTimer = setInterval(sortTraits, 250);
-    setTimeout(stopWatch, 5000);
-  }
+  function stopWatch() { if (watchTimer) { clearInterval(watchTimer); watchTimer = 0; } }
+  function startWatch() { stopWatch(); watchTimer = setInterval(sortTraits, 250); setTimeout(stopWatch, 5000); }
 
   function attachRoot(root) {
     if (!root || root.dataset.raTraitOrderAttached === '1') return;
@@ -86,21 +67,15 @@
   function attach() {
     attachRoot(document.getElementById('ra-fgo-trait-filter'));
     attachRoot(document.getElementById('ra-fgo-combined-search'));
+    attachRoot(document.getElementById('ra-fgo-combined-advanced'));
     sortTraits();
   }
 
   fetch(dataUrl(), { cache: 'no-cache' })
-    .then(response => {
-      if (!response.ok) throw new Error('HTTP ' + response.status);
-      return response.text();
-    })
+    .then(response => { if (!response.ok) throw new Error('HTTP ' + response.status); return response.text(); })
     .then(text => {
       order = text.split(/\r?\n/).map(v => v.trim()).filter(Boolean);
-      window.RaFGOTraitOrder = Object.freeze({
-        compareNames,
-        sort: sortTraits,
-        getOrder: () => order.slice()
-      });
+      window.RaFGOTraitOrder = Object.freeze({ compareNames, sort: sortTraits, getOrder: () => order.slice() });
       attach();
       startWatch();
     })
