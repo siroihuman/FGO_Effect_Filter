@@ -11,7 +11,7 @@
   const core = window.RaFGODataCore;
   if (!core) return;
 
-  const VERSION = '0.1.0-dev';
+  const VERSION = '0.1.1-dev';
   const EFFECT_HINTS = ['effect', 'skill', 'fgo'];
   const TRAIT_HINT = 'trait';
 
@@ -117,6 +117,12 @@
     }));
 
     core.writeUnifiedServants(unified);
+    try {
+      window.dispatchEvent(new CustomEvent('ra-fgo-unified-data-updated', {
+        detail: { servantCount: unified.length }
+      }));
+    } catch (_) {}
+
     return {
       servants: unified,
       traitCount: traitRecords.length,
