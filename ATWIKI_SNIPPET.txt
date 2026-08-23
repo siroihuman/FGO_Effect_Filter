@@ -1,1 +1,1 @@
-#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@78ddd52921f84a0d237fc8dd919f2dba8079457f/Ra_FGOEffectFilter.js)
+#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@c79ad05cb894a7a20267072dd2d2c7ad0065c8ac/Ra_FGOEffectFilter.js)
