@@ -18,7 +18,8 @@
     'Ra_FGODataCore.js',
     'Ra_FGOEffectFilter.js',
     'Ra_FGOTraitFilterCore.js',
-    'Ra_FGOTraitOrder.js'
+    'Ra_FGOTraitOrder.js',
+    'Ra_FGOUnifiedData.js'
   ];
 
   function assetUrl(path) {
@@ -86,10 +87,20 @@
         target.click();
         await waitForButton(target);
       }
+
       const stats = window.RaFGOSharedFetch && window.RaFGOSharedFetch.stats ? window.RaFGOSharedFetch.stats() : null;
-      status.textContent = stats
-        ? '統合読込完了：共有ページ ' + stats.cachedPages + ' / 再利用 ' + stats.cacheHits
-        : '統合読込完了';
+      const unified = window.RaFGOUnifiedData && typeof window.RaFGOUnifiedData.build === 'function'
+        ? window.RaFGOUnifiedData.build()
+        : null;
+
+      if (unified) {
+        status.textContent = '統合読込完了：' + unified.servants.length + '騎 / 特性 ' + unified.traitCount + ' / 効果 ' + unified.effectCount
+          + (stats ? ' / 共有ページ ' + stats.cachedPages + ' / 再利用 ' + stats.cacheHits : '');
+      } else if (stats) {
+        status.textContent = '統合読込完了：共有ページ ' + stats.cachedPages + ' / 再利用 ' + stats.cacheHits;
+      } else {
+        status.textContent = '統合読込完了';
+      }
     } finally {
       button.disabled = false;
     }
