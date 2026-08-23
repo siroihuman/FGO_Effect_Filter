@@ -8,10 +8,11 @@
 
   if (window.RaFGODataCore) return;
 
-  const VERSION = '0.1.0';
+  const VERSION = '0.2.0';
   const WIKI_ORIGIN = 'https://w.atwiki.jp';
   const INDEX_PATH = '/siroi_human/pages/54.html';
   const DEFAULT_CONCURRENCY = 6;
+  const UNIFIED_CACHE_KEY = 'ra_fgo_unified_servants_v1';
 
   const CLASS_MAP = Object.freeze({
     '剣': 'セイバー', '弓': 'アーチャー', '槍': 'ランサー', '騎': 'ライダー',
@@ -162,11 +163,61 @@
     } catch (_) {}
   }
 
+  function servantIdentity(servant) {
+    if (!servant || typeof servant !== 'object') return '';
+    const id = normalizeText(servant.id || servant.pageId || servant.page_id);
+    if (id) return `id:${id}`;
+    const url = normalizeText(servant.url || servant.href || servant.pageUrl || servant.page_url);
+    const urlId = pageIdFromHref(url);
+    if (urlId) return `id:${urlId}`;
+    const name = normalizeText(servant.name || servant.servantName || servant.servant_name || servant.title);
+    return name ? `name:${name}` : '';
+  }
+
+  function mergeServantRecords(baseRecords, extraRecords, fieldName) {
+    const map = new Map();
+    (Array.isArray(baseRecords) ? baseRecords : []).forEach(item => {
+      const key = servantIdentity(item);
+      if (key) map.set(key, { ...item });
+    });
+
+    (Array.isArray(extraRecords) ? extraRecords : []).forEach(item => {
+      const key = servantIdentity(item);
+      if (!key) return;
+      const current = map.get(key) || {};
+      if (fieldName) {
+        current[fieldName] = item;
+        if (!current.id && item.id) current.id = item.id;
+        if (!current.name && item.name) current.name = item.name;
+        if (!current.className && item.className) current.className = item.className;
+        if (!current.rarity && item.rarity) current.rarity = item.rarity;
+        if (!current.url && item.url) current.url = item.url;
+      } else {
+        Object.assign(current, item);
+      }
+      map.set(key, current);
+    });
+    return Array.from(map.values());
+  }
+
+  function writeUnifiedServants(records) {
+    return writeCache(UNIFIED_CACHE_KEY, Array.isArray(records) ? records : []);
+  }
+
+  function readUnifiedServants(ttl) {
+    return readCache(UNIFIED_CACHE_KEY, ttl || 24 * 60 * 60 * 1000) || [];
+  }
+
+  function clearUnifiedServants() {
+    clearCache(UNIFIED_CACHE_KEY);
+  }
+
   window.RaFGODataCore = Object.freeze({
     version: VERSION,
     wikiOrigin: WIKI_ORIGIN,
     indexPath: INDEX_PATH,
     classMap: CLASS_MAP,
+    unifiedCacheKey: UNIFIED_CACHE_KEY,
     normalizeText,
     absoluteWikiUrl,
     pageIdFromHref,
@@ -177,6 +228,11 @@
     loadServantDocuments,
     readCache,
     writeCache,
-    clearCache
+    clearCache,
+    servantIdentity,
+    mergeServantRecords,
+    writeUnifiedServants,
+    readUnifiedServants,
+    clearUnifiedServants
   });
 })();
