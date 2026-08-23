@@ -12,7 +12,7 @@
   const current = document.currentScript;
   const fallback = 'https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@feature/trait-filter-foundation/data/trait_display_order.txt';
   let order = [];
-  let sorting = false;
+  let watchTimer = 0;
 
   function dataUrl() {
     try {
@@ -34,14 +34,15 @@
   }
 
   function sortTraits() {
-    if (sorting || !order.length) return;
+    if (!order.length) return;
     const root = document.getElementById('ra-fgo-trait-filter');
     if (!root) return;
 
     const inputs = Array.from(root.querySelectorAll('input[type="checkbox"][value]'));
     if (inputs.length < 2) return;
 
-    const box = inputs[0].parentNode && inputs[0].parentNode.parentNode;
+    const firstLabel = inputs[0].parentNode;
+    const box = firstLabel && firstLabel.parentNode;
     if (!box) return;
 
     const labels = Array.from(box.children).filter(node => {
@@ -64,9 +65,28 @@
     }
     if (!changed) return;
 
-    sorting = true;
     sorted.forEach(label => box.appendChild(label));
-    sorting = false;
+  }
+
+  function stopWatch() {
+    if (!watchTimer) return;
+    clearInterval(watchTimer);
+    watchTimer = 0;
+  }
+
+  function startWatch() {
+    stopWatch();
+    watchTimer = setInterval(() => {
+      const root = document.getElementById('ra-fgo-trait-filter');
+      if (!root) return;
+
+      sortTraits();
+
+      const text = root.textContent || '';
+      if (text.includes('読込完了：') || text.includes('キャッシュ読込済み：') || text.includes('読込失敗：')) {
+        stopWatch();
+      }
+    }, 250);
   }
 
   function attach() {
@@ -76,10 +96,14 @@
       return;
     }
 
-    const observer = new MutationObserver(() => sortTraits());
-    observer.observe(root, { childList: true, subtree: true });
     root.addEventListener('input', () => setTimeout(sortTraits, 0));
-    root.addEventListener('click', () => setTimeout(sortTraits, 0));
+    root.addEventListener('click', event => {
+      const target = event.target;
+      const text = target && target.textContent ? target.textContent : '';
+      if (text === 'データ読込' || text === '再読込') startWatch();
+      else setTimeout(sortTraits, 0);
+    });
+
     sortTraits();
   }
 
