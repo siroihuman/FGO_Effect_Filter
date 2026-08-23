@@ -17,7 +17,10 @@
     'tools/v1.3.1/chunks/p01.b64',
     'tools/v1.3.1/chunks/p02.b64',
     'tools/v1.3.1/chunks/p03.b64',
-    'tools/v1.3.1/chunks/p04.b64',
+    'tools/v1.3.1/chunks/p04a.b64',
+    'tools/v1.3.1/chunks/p04b1.b64',
+    'tools/v1.3.1/chunks/p04b2_1.b64',
+    'tools/v1.3.1/chunks/p04b2_2.b64',
     'tools/v1.3.1/chunks/p05.b64',
     'tools/v1.3.1/chunks/p06.b64'
   ];
