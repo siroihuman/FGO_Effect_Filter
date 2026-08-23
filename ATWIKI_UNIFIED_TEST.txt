@@ -8,6 +8,8 @@ Author: argyi
 
 #include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@187115f89438db15331eaf3583779ae40a39824d/Ra_FGOUnifiedFilter.js)
 
+※この固定コミットには、総合検索UIを含む今回の実装一式が入っています。
+
 ========================================
 2. 今回の確認手順
 ========================================
