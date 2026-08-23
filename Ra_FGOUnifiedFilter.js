@@ -3,7 +3,7 @@
  * @wiki / siroi_human 用 サーヴァント総合検索 bootstrap
  * Author: argyi
  *
- * 既存の効果検索と共通基盤版の特性検索を同一ページで起動します。
+ * 既存の効果検索・特性検索と統合検索UIを同一ページで起動します。
  */
 (() => {
   'use strict';
@@ -18,8 +18,9 @@
     'Ra_FGODataCore.js',
     'Ra_FGOEffectFilter.js',
     'Ra_FGOTraitFilterCore.js',
-    'Ra_FGOTraitOrder.js',
-    'Ra_FGOUnifiedData.js'
+    'Ra_FGOUnifiedData.js',
+    'Ra_FGOCombinedSearch.js',
+    'Ra_FGOTraitOrder.js'
   ];
 
   function assetUrl(path) {
@@ -135,7 +136,7 @@
       title.textContent = 'サーヴァント総合検索（統合開発版）';
       const note = document.createElement('div');
       note.style.cssText = 'margin-top:4px;font-size:12px;color:#555;';
-      note.textContent = '上の「統合データ読込」1回で、効果検索と特性検索のデータをまとめて読み込めます。';
+      note.textContent = '「統合データ読込」1回でデータを準備し、特性と効果を同時に絞り込めます。';
       head.appendChild(title);
       head.appendChild(note);
       mountParent().appendChild(head);
