@@ -20,6 +20,7 @@
     'Ra_FGOTraitFilterCore.js',
     'Ra_FGOUnifiedData.js',
     'Ra_FGOCombinedSearch.js',
+    'Ra_FGOCombinedAdvanced.js',
     'Ra_FGOTraitOrder.js'
   ];
 
@@ -56,9 +57,7 @@
   }
 
   function getLoadButtons() {
-    return Array.from(document.querySelectorAll('button')).filter(button => {
-      return String(button.textContent || '').trim() === 'データ読込';
-    });
+    return Array.from(document.querySelectorAll('button')).filter(button => String(button.textContent || '').trim() === 'データ読込');
   }
 
   function waitForButton(button) {
@@ -77,9 +76,7 @@
 
   async function runUnifiedLoad(button, status) {
     const buttons = getLoadButtons();
-    if (buttons.length < 2) {
-      throw new Error('効果検索または特性検索のデータ読込ボタンを検出できませんでした。');
-    }
+    if (buttons.length < 2) throw new Error('効果検索または特性検索のデータ読込ボタンを検出できませんでした。');
 
     button.disabled = true;
     try {
@@ -90,9 +87,7 @@
       }
 
       const stats = window.RaFGOSharedFetch && window.RaFGOSharedFetch.stats ? window.RaFGOSharedFetch.stats() : null;
-      const unified = window.RaFGOUnifiedData && typeof window.RaFGOUnifiedData.build === 'function'
-        ? window.RaFGOUnifiedData.build()
-        : null;
+      const unified = window.RaFGOUnifiedData && typeof window.RaFGOUnifiedData.build === 'function' ? window.RaFGOUnifiedData.build() : null;
 
       if (unified) {
         status.textContent = '統合読込完了：' + unified.servants.length + '騎 / 特性 ' + unified.traitCount + ' / 効果 ' + unified.effectCount
@@ -122,8 +117,7 @@
         status.textContent = '読込失敗：' + (error && error.message ? error.message : error);
       });
     });
-    row.appendChild(button);
-    row.appendChild(status);
+    row.append(button, status);
     head.appendChild(row);
   }
 
@@ -136,14 +130,11 @@
       title.textContent = 'サーヴァント総合検索（統合開発版）';
       const note = document.createElement('div');
       note.style.cssText = 'margin-top:4px;font-size:12px;color:#555;';
-      note.textContent = '「統合データ読込」1回でデータを準備し、特性と効果を同時に絞り込めます。';
-      head.appendChild(title);
-      head.appendChild(note);
+      note.textContent = '「統合データ読込」1回でデータを準備し、特性・効果・対象・倍率・能力種別を同時に絞り込めます。';
+      head.append(title, note);
       mountParent().appendChild(head);
 
-      for (const path of MODULES) {
-        await loadScript(path);
-      }
+      for (const path of MODULES) await loadScript(path);
       addUnifiedControls(head);
     } catch (error) {
       showError(error);
