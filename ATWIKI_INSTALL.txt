@@ -6,7 +6,7 @@ Author: argyi
 ========================================
 検索ページを「管理者のみ編集可能」にし、本文へ次の1行を記述してください。
 
-#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@ae43fe2bccc3bee937057e9644d98e3b523d4469/Ra_FGOEffectFilter.js)
+#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@bb4116b7dee97d828c9cd7afdf144ff43bfbe9c2/Ra_FGOEffectFilter.js)
 
 ※ @main はjsDelivrのキャッシュで旧版が残る場合があるため、コミット固定URLを使用します。
 
