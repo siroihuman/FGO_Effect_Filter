@@ -4,7 +4,6 @@
  * Author: argyi
  *
  * 既存の効果検索と共通基盤版の特性検索を同一ページで起動します。
- * 現段階ではUIを安全に同居させる統合第1段階です。
  */
 (() => {
   'use strict';
@@ -15,6 +14,7 @@
   const current = document.currentScript;
   const FALLBACK_BASE = 'https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@main/';
   const MODULES = [
+    'Ra_FGOSharedFetch.js',
     'Ra_FGODataCore.js',
     'Ra_FGOEffectFilter.js',
     'Ra_FGOTraitFilterCore.js',
@@ -53,6 +53,68 @@
     });
   }
 
+  function getLoadButtons() {
+    return Array.from(document.querySelectorAll('button')).filter(button => {
+      return String(button.textContent || '').trim() === 'データ読込';
+    });
+  }
+
+  function waitForButton(button) {
+    return new Promise(resolve => {
+      const startedAt = Date.now();
+      let sawDisabled = button.disabled;
+      const timer = setInterval(() => {
+        if (button.disabled) sawDisabled = true;
+        if ((sawDisabled && !button.disabled) || (!sawDisabled && Date.now() - startedAt > 700)) {
+          clearInterval(timer);
+          resolve();
+        }
+      }, 100);
+    });
+  }
+
+  async function runUnifiedLoad(button, status) {
+    const buttons = getLoadButtons();
+    if (buttons.length < 2) {
+      throw new Error('効果検索または特性検索のデータ読込ボタンを検出できませんでした。');
+    }
+
+    button.disabled = true;
+    try {
+      status.textContent = '効果・特性データを読込中…';
+      for (const target of buttons) {
+        target.click();
+        await waitForButton(target);
+      }
+      const stats = window.RaFGOSharedFetch && window.RaFGOSharedFetch.stats ? window.RaFGOSharedFetch.stats() : null;
+      status.textContent = stats
+        ? '統合読込完了：共有ページ ' + stats.cachedPages + ' / 再利用 ' + stats.cacheHits
+        : '統合読込完了';
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function addUnifiedControls(head) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = '統合データ読込';
+    const status = document.createElement('span');
+    status.style.cssText = 'font-size:12px;color:#555;';
+    status.textContent = '未読込';
+    button.addEventListener('click', () => {
+      runUnifiedLoad(button, status).catch(error => {
+        console.error('[Ra_FGOUnifiedFilter] 統合データ読込に失敗しました。', error);
+        status.textContent = '読込失敗：' + (error && error.message ? error.message : error);
+      });
+    });
+    row.appendChild(button);
+    row.appendChild(status);
+    head.appendChild(row);
+  }
+
   async function boot() {
     try {
       const head = document.createElement('div');
@@ -62,7 +124,7 @@
       title.textContent = 'サーヴァント総合検索（統合開発版）';
       const note = document.createElement('div');
       note.style.cssText = 'margin-top:4px;font-size:12px;color:#555;';
-      note.textContent = 'スキル効果検索と特性検索を同一ページで利用できます。';
+      note.textContent = '上の「統合データ読込」1回で、効果検索と特性検索のデータをまとめて読み込めます。';
       head.appendChild(title);
       head.appendChild(note);
       mountParent().appendChild(head);
@@ -70,6 +132,7 @@
       for (const path of MODULES) {
         await loadScript(path);
       }
+      addUnifiedControls(head);
     } catch (error) {
       showError(error);
     }
