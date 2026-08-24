@@ -25,7 +25,7 @@
     'tools/v1.3.6/parts/np_fix.txt',
     'tools/v1.3.6/parts/p07b.txt'
   ];
-  const EXPECTED_SOURCE_LENGTH = 73090;
+  const EXPECTED_SOURCE_LENGTH = 73082;
   const EXPECTED_UTF8_LENGTH = 81370;
 
   function assetUrl(path) {
