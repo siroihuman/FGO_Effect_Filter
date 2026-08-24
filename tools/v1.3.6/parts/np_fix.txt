@@ -1,11 +1,15 @@
 
   // v1.3.6: 強化後宝具を同一宝具の最新版として確実に扱う。
-  function inferNpName(text) {
+  function inferNpNameCandidate(text) {
     const lines = normalizeText(text).split(/\n+/).map(normalizeText).filter(Boolean);
     const headerIndex = lines.findIndex(line => /Card/.test(line) && /ランク/.test(line) && /効果/.test(line));
     const candidates = (headerIndex >= 0 ? lines.slice(0, headerIndex) : lines.slice(0, 3))
       .filter(line => !/^強化後(?:\s|$|[「（(])/.test(line) && !looksLikeEffectDescription(line));
-    return candidates.slice(0, 2).join(' / ') || '宝具';
+    return candidates.slice(0, 2).join(' / ');
+  }
+
+  function inferNpName(text) {
+    return inferNpNameCandidate(text) || '宝具';
   }
 
   function nearestNpSubheading(table, sectionHeading) {
@@ -34,7 +38,7 @@
       const context = inferNpContext(table);
       const subheading = normalizeText(nearestNpSubheading(table, heading)?.textContent || '');
       const combined = normalizeText(`${context}\n${tableText}`);
-      const name = inferNpName(tableText) || inferNpName(combined) || `宝具${index + 1}`;
+      const name = inferNpNameCandidate(tableText) || inferNpNameCandidate(combined) || `宝具${index + 1}`;
       return {
         scope:'np',
         name,
