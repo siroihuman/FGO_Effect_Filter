@@ -1,0 +1,255 @@
+lassName = '';
+    let traits = [];
+    const rows = [...doc.querySelectorAll('tr')];
+    for (const tr of rows) {
+      const cells = [...tr.querySelectorAll('th,td')];
+      const texts = cells.map(c => normalizeText(c.textContent));
+      for (let i = 0; i < texts.length; i++) {
+        if (texts[i] === 'Class' && cells[i + 1]) className ||= inferClassFromCell(cells[i + 1]);
+        if (texts[i] === 'Rare' && texts[i + 1]) {
+          const m = texts[i + 1].match(/[1-5]/);
+          if (m) rarity ||= m[0];
+        }
+        if (texts[i] === '真名' && texts[i + 1] && !name) name = texts[i + 1];
+        if (texts[i] === '特性' && cells[i + 1]) {
+          const parsedTraits = parseTraitText(cells[i + 1].innerText || cells[i + 1].textContent || texts[i + 1] || '');
+          if (parsedTraits.length) traits.push(...parsedTraits);
+        }
+      }
+    }
+
+    const fullText = normalizeText(doc.body?.innerText || doc.body?.textContent || '');
+    if (!rarity) {
+      const m = fullText.match(/Rare\s*([1-5])/i);
+      if (m) rarity = m[1];
+    }
+    if (!className) {
+      const m = fullText.match(/Class\s*(セイバー|アーチャー|ランサー|ライダー|キャスター|アサシン|バーサーカー|シールダー|ルーラー|アヴェンジャー|ムーンキャンサー|アルターエゴ|フォーリナー|プリテンダー|ビースト)/);
+      if (m) className = m[1];
+    }
+
+    const noMatch = fullText.match(/No\.\s*([0-9]+['’′]?)/i);
+    const traitSeen = new Set();
+    traits = traits.filter(trait => {
+      const key = `${trait.name}\u0000${trait.condition || ''}`;
+      if (traitSeen.has(key)) return false;
+      traitSeen.add(key);
+      return true;
+    });
+    return { name: name || url, rarity, className, no: noMatch ? noMatch[1] : '', traits };
+  }
+
+  function clausesFromText(text) {
+    return normalizeText(text)
+      .split(/\n+|(?<=[。；;])/)
+      .map(s => normalizeText(s))
+      .filter(Boolean);
+  }
+
+  function inferTargetsForEffect(text, effect) {
+    const found = new Set();
+    let inheritedTarget = null;
+    for (const clause of clausesFromText(text)) {
+      const explicit = TARGETS.find(t => t.regex.test(clause));
+      if (explicit) inheritedTarget = explicit.id;
+      if (effectTextMatches(effect, clause)) {
+        if (explicit) found.add(explicit.id);
+        else if (inheritedTarget) found.add(inheritedTarget);
+      }
+    }
+    return [...found];
+  }
+
+  function analyzeAbility(block) {
+    const sourceRows = Array.isArray(block.effectRows) && block.effectRows.length
+      ? block.effectRows
+      : extractEffectRowsFromText(block.text);
+    let inheritedTarget = null;
+    const rows = sourceRows.map((row, rowIndex) => {
+      const explicit = TARGETS.find(t => t.regex.test(row.text));
+      if (explicit) inheritedTarget = explicit.id;
+      const target = explicit?.id || inheritedTarget || null;
+      const effectIds = [...EFFECT_MAP.values()]
+        .filter(effect => effectTextMatches(effect, row.text))
+        .map(effect => effect.id);
+      const values = (row.values || []).map(v => ({
+        raw:String(v.raw ?? ''),
+        value:Number.isFinite(v.value) ? v.value : numericValue(v.raw)
+      }));
+      const finalValue = [...values].reverse().find(v => Number.isFinite(v.value))?.value ?? null;
+      return { rowIndex, text:row.text, values, finalValue, target, effectIds };
+    });
+
+    const buckets = new Map();
+    for (const row of rows) {
+      for (const id of row.effectIds) {
+        if (!buckets.has(id)) buckets.set(id, { id, targets:new Set(), occurrences:[] });
+        const bucket = buckets.get(id);
+        if (row.target) bucket.targets.add(row.target);
+        bucket.occurrences.push({
+          rowIndex:row.rowIndex,
+          target:row.target,
+          values:row.values,
+          finalValue:row.finalValue
+        });
+      }
+    }
+
+    const effects = [...buckets.values()].map(bucket => ({
+      id:bucket.id,
+      targets:[...bucket.targets],
+      occurrences:bucket.occurrences
+    }));
+
+    // 表解析に失敗した古い/特殊ページ向けフォールバック。
+    if (!effects.length) {
+      for (const effect of EFFECT_MAP.values()) {
+        if (effectTextMatches(effect, block.text)) {
+          effects.push({
+            id:effect.id,
+            targets:inferTargetsForEffect(block.text, effect),
+            occurrences:[]
+          });
+        }
+      }
+    }
+
+    return { ...block, effectRows:rows, effects };
+  }
+
+  function analyzeRecord(meta, url, blocks) {
+    const scopeCounts = { skill:0, np:0, classSkill:0 };
+    const abilities = blocks.map(block => {
+      const scope = block.scope || '';
+      if (Object.prototype.hasOwnProperty.call(scopeCounts, scope)) scopeCounts[scope] += 1;
+      const scopeIndex = Object.prototype.hasOwnProperty.call(scopeCounts, scope) ? scopeCounts[scope] : 0;
+      return analyzeAbility({ ...block, scopeIndex });
+    });
+    return { ...meta, url, abilities };
+  }
+
+  async function fetchText(url) {
+    const response = await fetch(url, { credentials:'same-origin', cache:'no-cache' });
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    return response.text();
+  }
+
+  function parseHtml(html) {
+    return new DOMParser().parseFromString(html, 'text/html');
+  }
+
+  function extractServantLinks(indexDoc) {
+    const heading = findHeading(indexDoc, 'サーヴァント');
+    let table = null;
+    if (heading) {
+      let node = heading.nextElementSibling;
+      while (node && !/^H[1-6]$/.test(node.tagName)) {
+        if (node.tagName === 'TABLE') { table = node; break; }
+        table ||= node.querySelector?.('table') || null;
+        if (table) break;
+        node = node.nextElementSibling;
+      }
+    }
+    if (!table) {
+      table = [...indexDoc.querySelectorAll('table')].find(t => {
+        const txt = normalizeText(t.textContent);
+        return txt.includes('C★') && txt.includes('SSR★★★★★') && txt.includes('剣') && txt.includes('獣');
+      });
+    }
+    if (!table) throw new Error('サーヴァント一覧表を検出できませんでした。');
+
+    const urls = [];
+    for (const a of table.querySelectorAll('a[href]')) {
+      const href = a.getAttribute('href') || '';
+      const abs = new URL(href, WIKI_ROOT).href;
+      if (!/^https:\/\/w\.atwiki\.jp\/siroi_human\/pages\/\d+\.html(?:[#?].*)?$/.test(abs)) continue;
+      if (/img\.atwiki\.jp/.test(abs)) continue;
+      urls.push(abs.replace(/[?#].*$/, ''));
+    }
+    return [...new Set(urls)];
+  }
+
+  async function parseServant(url) {
+    const html = await fetchText(url);
+    const doc = parseHtml(html);
+    const meta = parseMetadata(doc, url);
+    const blocks = collectAbilityBlocks(doc);
+    if (!blocks.length) throw new Error('スキル・宝具欄を検出できませんでした。');
+    return analyzeRecord(meta, url, blocks);
+  }
+
+  async function mapWithConcurrency(items, concurrency, mapper, onProgress) {
+    const results = new Array(items.length);
+    let cursor = 0;
+    let completed = 0;
+    async function worker() {
+      while (true) {
+        const i = cursor++;
+        if (i >= items.length) return;
+        try {
+          results[i] = await mapper(items[i], i);
+        } catch (error) {
+          results[i] = { __error:true, item:items[i], message:error?.message || String(error) };
+        } finally {
+          completed++;
+          onProgress?.(completed, items.length);
+        }
+      }
+    }
+    await Promise.all(Array.from({ length:Math.min(concurrency, items.length) }, () => worker()));
+    return results;
+  }
+
+  function loadCache() {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return false;
+      const cache = JSON.parse(raw);
+      if (!cache || cache.version !== VERSION || !Array.isArray(cache.records)) return false;
+      if (Date.now() - Number(cache.savedAt || 0) > CACHE_TTL_MS) return false;
+      state.records = cache.records;
+      state.loadedAt = Number(cache.savedAt || 0);
+      state.failures = Array.isArray(cache.failures) ? cache.failures : [];
+      state.traitCatalog = Array.isArray(cache.traitCatalog) ? cache.traitCatalog : [];
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function saveCache() {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
+        version: VERSION,
+        savedAt: Date.now(),
+        records: state.records,
+        failures: state.failures,
+        traitCatalog: state.traitCatalog
+      }));
+    } catch (error) {
+      console.warn('[Ra_FGOEffectFilter] cache save failed:', error);
+    }
+  }
+
+  function setStatus(text, kind='normal') {
+    const el = state.elements.status;
+    if (!el) return;
+    el.textContent = text;
+    el.dataset.kind = kind;
+  }
+
+  function setProgress(done, total) {
+    const bar = state.elements.progressBar;
+    const label = state.elements.progressLabel;
+    if (!bar || !label) return;
+    const ratio = total ? Math.round(done / total * 100) : 0;
+    bar.style.width = `${ratio}%`;
+    label.textContent = total ? `${done} / ${total}（${ratio}%）` : '';
+  }
+
+  async function loadAllData(force=false) {
+    if (state.loading) return;
+    if (!force && state.records.length) return;
+    state.loading = true;
+    state.elements.loadButton.disabled = true;
+    stat
