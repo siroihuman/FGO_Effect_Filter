@@ -1,7 +1,7 @@
 /*
  * Ra_FGOEffectFilter.js
  * @wiki / siroi_human 用 FGOスキル・宝具・特性検索 bootstrap
- * Version: 1.3.5
+ * Version: 1.3.6
  * Author: argyi
  */
 (() => {
@@ -12,7 +12,7 @@
   const current = document.currentScript;
   const FALLBACK_BASE = 'https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@main/';
   const PART_PATHS = [
-    'tools/v1.3.5/parts/p00a.txt',
+    'tools/v1.3.6/parts/p00a.txt',
     'tools/v1.3.5/parts/p00b.txt',
     'tools/v1.3.5/parts/p00c.txt',
     'tools/v1.3.5/parts/p01.txt',
@@ -21,10 +21,12 @@
     'tools/v1.3.5/parts/p04.txt',
     'tools/v1.3.5/parts/p05.txt',
     'tools/v1.3.5/parts/p06.txt',
-    'tools/v1.3.5/parts/p07.txt'
+    'tools/v1.3.6/parts/p07a.txt',
+    'tools/v1.3.6/parts/np_fix.txt',
+    'tools/v1.3.6/parts/p07b.txt'
   ];
-  const EXPECTED_SOURCE_LENGTH = 70481;
-  const EXPECTED_UTF8_LENGTH = 78665;
+  const EXPECTED_SOURCE_LENGTH = 73090;
+  const EXPECTED_UTF8_LENGTH = 81370;
 
   function assetUrl(path) {
     try {
@@ -55,7 +57,7 @@
       if (code.length !== EXPECTED_SOURCE_LENGTH || byteLength !== EXPECTED_UTF8_LENGTH) {
         throw new Error(`本体データ長が不正です: ${code.length}/${byteLength} / ${EXPECTED_SOURCE_LENGTH}/${EXPECTED_UTF8_LENGTH}`);
       }
-      if (!/Version:\s*1\.3\.5/.test(code) || !/const VERSION = '1\.3\.5';/.test(code)) {
+      if (!/Version:\s*1\.3\.6/.test(code) || !/const VERSION = '1\.3\.6';/.test(code)) {
         throw new Error('本体バージョンの検証に失敗しました。');
       }
       const script = document.createElement('script');
