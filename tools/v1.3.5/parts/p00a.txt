@@ -1,0 +1,69 @@
+/*
+ * Ra_FGOEffectFilter.js
+ * @wiki / siroi_human 用 FGOスキル・宝具効果検索
+ * Version: 1.3.5
+ * Author: argyi
+ *
+ * 対象Wiki:
+ *   https://w.atwiki.jp/siroi_human/
+ *
+ * 概要:
+ * - 「オリジナルサーヴァント＆エネミー」一覧からサーヴァントURLを自動取得
+ * - 個別ページの「保有スキル」「宝具」「クラススキル」を解析
+ * - 効果 / 対象 / クラス / レアリティ / 特性 / 検索範囲 / AND・OR で絞り込み
+ * - 解析結果を localStorage に保存し、通常閲覧時の再取得を抑制
+ */
+(() => {
+  'use strict';
+
+  const VERSION = '1.3.5';
+  const WIKI_ROOT = 'https://w.atwiki.jp/siroi_human';
+  const INDEX_URL = `${WIKI_ROOT}/pages/54.html`;
+  const TRAIT_INDEX_URL = `${WIKI_ROOT}/pages/427.html`;
+  const CACHE_KEY = 'ra_fgo_effect_filter_cache_v2';
+  const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+  const FETCH_CONCURRENCY = 4;
+  const scriptElement = document.currentScript;
+
+  const CLASS_LABELS = {
+    'セイバー': '剣', 'アーチャー': '弓', 'ランサー': '槍', 'ライダー': '騎',
+    'キャスター': '術', 'アサシン': '殺', 'バーサーカー': '狂', 'シールダー': '盾',
+    'ルーラー': '裁', 'アヴェンジャー': '讐', 'ムーンキャンサー': '月', 'アルターエゴ': '分',
+    'フォーリナー': '降', 'プリテンダー': '詐', 'ビースト': '獣'
+  };
+
+  const CLASS_ORDER = ['セイバー','アーチャー','ランサー','ライダー','キャスター','アサシン','バーサーカー','シールダー','ルーラー','アヴェンジャー','ムーンキャンサー','アルターエゴ','フォーリナー','プリテンダー','ビースト'];
+
+  const EFFECT_GROUPS = [
+    {
+      name: '攻撃・カード',
+      effects: [
+        ['attack_up','攻撃力アップ',/攻撃力(?:を)?アップ|攻撃力上昇/i],
+        ['attack_down','攻撃力ダウン',/攻撃力(?:を)?ダウン|攻撃力低下/i],
+        ['defense_up','防御力アップ',/防御力(?:を)?アップ|防御力上昇/i,/〔[^〕]*防御力アップ[^〕]*〕[^。\n]{0,12}特攻/i],
+        ['defense_down','防御力ダウン',/防御力(?:を)?ダウン|防御力低下/i],
+        ['quick_up','Quick性能アップ',/(?:Quick|クイック)(?:カード)?性能(?:を)?アップ|Quickカード威力(?:を)?アップ/i],
+        ['arts_up','Arts性能アップ',/(?:Arts|アーツ)(?:カード)?性能(?:を)?アップ|Artsカード威力(?:を)?アップ/i],
+        ['buster_up','Buster性能アップ',/(?:Buster|バスター)(?:カード)?性能(?:を)?アップ|Busterカード威力(?:を)?アップ/i],
+        ['quick_res_down','Quick攻撃耐性ダウン',/(?:Quick|クイック)(?:カード|攻撃)?耐性(?:を)?ダウン/i],
+        ['arts_res_down','Arts攻撃耐性ダウン',/(?:Arts|アーツ)(?:カード|攻撃)?耐性(?:を)?ダウン/i],
+        ['buster_res_down','Buster攻撃耐性ダウン',/(?:Buster|バスター)(?:カード|攻撃)?耐性(?:を)?ダウン/i],
+        ['np_damage_up','宝具威力アップ',/宝具威力(?:を)?アップ/i],
+        ['crit_damage_up','クリティカル威力アップ',/クリティカル威力(?:を)?アップ|クリ威力(?:を)?アップ/i],
+        ['crit_rate_down','クリティカル発生率ダウン',/クリティカル発生率(?:を)?ダウン|クリ発生率(?:を)?ダウン/i],
+        ['special_attack','特攻付与・特攻威力アップ',/特攻(?:状態|威力)?(?:を)?(?:付与|アップ)|特攻付与/i],
+        ['special_defense','特防・特攻耐性',/特攻耐性(?:を)?アップ|特防(?:状態)?(?:を)?付与/i],
+        ['damage_plus','与ダメージプラス',/与ダメージプラス|与えるダメージ(?:を)?プラス/i],
+        ['damage_cut','ダメージカット',/ダメージカット/i],
+        ['hit_count','Hit数増加',/(?:(?:通常|Quick|Arts|Buster|Extra|宝具)?攻撃(?:の)?\s*)?(?:Hit|ヒット)数(?:を|が)?(?:\d+(?:倍|Hit)?(?:に)?(?:する|なる|増やす)|増やす|増加|アップ)/i]
+      ]
+    },
+    {
+      name: 'NP・スター',
+      effects: [
+        ['np_charge','NP増加',/NP(?:を)?(?:最大まで)?増やす|NP(?:を)?増加|NPチャージ/i],
+        ['np_per_turn','毎ターンNP獲得',/毎ターン[^。\n]{0,30}NP(?:を)?(?:獲得|増やす|増加)/i],
+        ['np_gain_up','NP獲得量アップ',/NP獲得量(?:を)?アップ/i],
+        ['np_gain_down','NP獲得量ダウン',/NP獲得量(?:を)?ダウン/i],
+        ['np_drain','NP減少',/NP(?:を)?減らす|NP(?:を)?減少/i],
+        ['
