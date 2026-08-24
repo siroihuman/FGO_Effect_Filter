@@ -1,0 +1,244 @@
+ectionText(h),
+          effectRows:extractEffectRowsFromElements(collectSectionElements(h))
+        });
+      }
+    }
+
+    // クラススキルは見出しではなく表が連続するページが多いため、表単位で分割する。
+    const classHeading = findHeading(doc, 'クラススキル');
+    const parsedClassSkills = extractClassSkillBlocks(classHeading);
+    if (parsedClassSkills.length) {
+      blocks.push(...parsedClassSkills);
+    }
+
+    // ページ構造が異なる場合のフォールバック
+    if (!blocks.some(b => b.scope === 'skill')) {
+      const h = findHeading(doc, '保有スキル');
+      const t = collectSectionText(h);
+      if (t) blocks.push({ scope:'skill', name:'保有スキル', text:t, effectRows:extractEffectRowsFromText(t) });
+    }
+    if (!blocks.some(b => b.scope === 'np')) {
+      const h = findHeading(doc, '宝具');
+      const t = collectSectionText(h);
+      if (t) blocks.push({ scope:'np', name:inferNpName(t), text:t, effectRows:extractEffectRowsFromText(t) });
+    }
+    if (!blocks.some(b => b.scope === 'classSkill')) {
+      const h = findHeading(doc, 'クラススキル');
+      const t = collectSectionText(h);
+      if (t) blocks.push({ scope:'classSkill', name:'クラススキル', text:t, effectRows:extractEffectRowsFromText(t) });
+    }
+
+    const usable = blocks.filter(b => b.text && b.text.length > 2);
+
+    // 同一スキルに強化後がある場合は強化後だけを検索対象にする。
+    // 旧効果だけでヒットする誤判定を防ぐため。
+    const skillGroups = new Map();
+    const others = [];
+    for (const block of usable) {
+      if (block.scope !== 'skill') { others.push(block); continue; }
+      const m = block.name.match(/^Skill\s*(\d+)/i);
+      if (!m) { others.push(block); continue; }
+      const key = m[1];
+      if (!skillGroups.has(key)) skillGroups.set(key, []);
+      skillGroups.get(key).push(block);
+    }
+    const preferredSkills = [];
+    for (const group of skillGroups.values()) {
+      const strengthened = group.filter(b => /強化後/.test(b.name));
+      preferredSkills.push(...(strengthened.length ? strengthened : group));
+    }
+
+    const preferredOthers = others.map(block => {
+      if (block.scope !== 'np' || !/強化後/.test(block.text)) return block;
+      const parts = block.text.split(/強化後/g);
+      const latest = normalizeText(parts[parts.length - 1]);
+      return latest ? {
+        ...block,
+        name:inferNpName(latest) || block.name,
+        text:latest,
+        effectRows:block.effectRows?.length ? block.effectRows : extractEffectRowsFromText(latest)
+      } : block;
+    });
+
+    return [...preferredSkills, ...preferredOthers];
+  }
+
+  function inferClassFromCell(cell) {
+    const text = normalizeText(cell?.textContent);
+    for (const cls of CLASS_ORDER) {
+      if (text.includes(cls)) return cls;
+    }
+    const imgText = [...(cell?.querySelectorAll?.('img') || [])]
+      .map(img => `${img.alt || ''} ${img.title || ''} ${img.src || ''}`).join(' ');
+    for (const cls of CLASS_ORDER) {
+      if (imgText.includes(cls)) return cls;
+    }
+    return '';
+  }
+
+  function canonicalTraitName(value) {
+    const name = normalizeText(value);
+    if (!name || name === '-' || name === '四季・春') return '';
+    // 夏モード／霊衣を持つ者の括弧内は特性名ではなく霊衣名の注記として扱う。
+    // 中身や空白の表記差に依存せず、検索・表示上は基本特性名へ統合する。
+    if (/^夏モード(?:\s*[（(][^）)]*[）)])?$/.test(name)) return '夏モード';
+    if (/^霊衣を持つ者(?:\s*[（(][^）)]*[）)])?$/.test(name)) return '霊衣を持つ者';
+    return name;
+  }
+
+  function parseTraitEntry(value) {
+    const text = normalizeText(value);
+    if (!text || text === '-') return null;
+    const match = text.match(/^(.*?)[（(]([^）)]+)[）)]$/);
+    if (match) {
+      const name = canonicalTraitName(match[1]);
+      const condition = normalizeText(match[2]);
+      if (name && /(?:第?[一二三四1234]|最終|再臨|段階|霊基)/.test(condition)) {
+        return { name, condition };
+      }
+    }
+    const name = canonicalTraitName(text);
+    return name ? { name, condition:'' } : null;
+  }
+
+  function parseTraitText(value) {
+    const entries = String(value ?? '')
+      .replace(/\u00a0/g, ' ')
+      .split(/\s*(?:\/|／|、|\n)\s*/)
+      .map(parseTraitEntry)
+      .filter(Boolean);
+    const seen = new Set();
+    return entries.filter(entry => {
+      const key = `${entry.name}\u0000${entry.condition}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  function traitEntries(record) {
+    return (Array.isArray(record?.traits) ? record.traits : [])
+      .map(trait => {
+        if (typeof trait === 'string') return parseTraitEntry(trait);
+        const name = canonicalTraitName(trait?.name);
+        return name ? { ...trait, name } : null;
+      })
+      .filter(trait => trait && normalizeText(trait.name));
+  }
+
+  function traitNames(record) {
+    return [...new Set(traitEntries(record).map(trait => normalizeText(trait.name)).filter(Boolean))];
+  }
+
+  function normalizeTraitLinkLabel(text) {
+    const normalized = normalizeText(text);
+    const direct = canonicalTraitName(normalized);
+    if (!direct) return '';
+    let match = normalized.match(/^〔(.+?)〕(?:特性)?(?:持ち(?:一覧|編集))?$/);
+    if (match) return canonicalTraitName(match[1]);
+    match = normalized.match(/^(.+?)特性$/);
+    if (match && !/^(?:各|サーヴァント|エネミー)/.test(match[1])) return canonicalTraitName(match[1]);
+    if (/^(?:各特性持ち編集|サーヴァント|エネミー|メニュー|トップページ|編集|一覧|ページ一覧)$/.test(direct)) return '';
+    return direct;
+  }
+
+  const TRAIT_CATEGORY_ROWS = [
+    ['基本','属性'],
+    ['通常クラス','Exクラス'],
+    ['クラススキル１','クラススキル２'],
+    ['通常特性１','通常特性２'],
+    ['特殊特性１','特殊特性２']
+  ];
+  const TRAIT_CATEGORY_ORDER = TRAIT_CATEGORY_ROWS.flat();
+
+  function canonicalTraitCategory(value) {
+    const category = normalizeText(value).replace(/\s+/g, '');
+    const aliases = new Map([
+      ['基本','基本'], ['属性','属性'],
+      ['通常クラス','通常クラス'], ['EXクラス','Exクラス'], ['Exクラス','Exクラス'], ['exクラス','Exクラス'],
+      ['クラススキル1','クラススキル１'], ['クラススキル１','クラススキル１'],
+      ['クラススキル2','クラススキル２'], ['クラススキル２','クラススキル２'],
+      ['通常特性1','通常特性１'], ['通常特性１','通常特性１'],
+      ['通常特性2','通常特性２'], ['通常特性２','通常特性２'],
+      ['特殊特性1','特殊特性１'], ['特殊特性１','特殊特性１'],
+      ['特殊特性2','特殊特性２'], ['特殊特性２','特殊特性２']
+    ]);
+    return aliases.get(category) || normalizeText(value);
+  }
+
+  function fallbackTraitCategory(name) {
+    const groups = [
+      ['性別', new Set(['男性','女性','性別不明'])],
+      ['属性・性格', new Set(['秩序','中立','混沌','善','中庸','悪','狂','夏'])],
+      ['天地人・獣', new Set(['天の力','地の力','人の力','星の力','獣の力'])],
+      ['クラス', new Set(CLASS_ORDER)],
+      ['クラス・霊基特性', new Set(['騎乗','神性','王','領域外の生命','道具作成','陣地作成','単独行動','気配遮断','狂化'])],
+      ['種族・形態', new Set(['サーヴァント','人型','ヒト科','ヒト科以外','魔性','猛獣','ケモノ科','魔獣型','機械','超巨大','竜','鬼','悪魔','妖精'])]
+    ];
+    for (const [category, set] of groups) if (set.has(name)) return category;
+    return 'その他・個別';
+  }
+
+  function nearestTraitCategory(anchor) {
+    const row = anchor.closest('tr');
+    if (row) {
+      const cells = [...row.querySelectorAll(':scope > th,:scope > td')];
+      const ownCell = anchor.closest('th,td');
+      const ownIndex = cells.indexOf(ownCell);
+      for (let i = ownIndex - 1; i >= 0; i--) {
+        const text = normalizeText(cells[i].textContent).replace(/[：:]$/, '');
+        if (text && text.length <= 24 && !/〔.+〕/.test(text) && !/特性持ち/.test(text)) return text;
+      }
+    }
+    const headings = [...anchor.ownerDocument.querySelectorAll('h2,h3,h4,h5')];
+    let last = '';
+    for (const heading of headings) {
+      const pos = heading.compareDocumentPosition(anchor);
+      if (pos & Node.DOCUMENT_POSITION_FOLLOWING) {
+        const text = normalizeText(heading.textContent)
+          .replace(/^[◆■●・\s]+/, '')
+          .replace(/[：:]$/, '');
+        if (text && !/^(?:メニュー|各特性持ち編集|siroi_human|ページ一覧)$/i.test(text)) last = text;
+      } else if (pos & Node.DOCUMENT_POSITION_PRECEDING) {
+        break;
+      }
+    }
+    return last;
+  }
+
+  function parseTraitCatalog(doc) {
+    const items = [];
+    const seen = new Set();
+    for (const anchor of doc.querySelectorAll('a[href]')) {
+      const name = normalizeTraitLinkLabel(anchor.textContent);
+      if (!name || seen.has(name)) continue;
+      let url;
+      try { url = new URL(anchor.getAttribute('href') || '', WIKI_ROOT); } catch (_) { continue; }
+      if (url.hostname !== 'w.atwiki.jp' || !url.pathname.startsWith('/siroi_human/')) continue;
+      const category = canonicalTraitCategory(nearestTraitCategory(anchor));
+      if (!TRAIT_CATEGORY_ORDER.includes(category)) continue;
+      seen.add(name);
+      items.push({ name, category });
+    }
+    return items;
+  }
+
+  async function loadTraitCatalog() {
+    try {
+      const html = await fetchText(TRAIT_INDEX_URL);
+      const catalog = parseTraitCatalog(parseHtml(html));
+      if (catalog.length) state.traitCatalog = catalog;
+    } catch (error) {
+      console.warn('[Ra_FGOEffectFilter] trait category load failed:', error);
+    }
+  }
+
+  function parseMetadata(doc, url) {
+    let name = '';
+    const contentHeadings = [...doc.querySelectorAll('h1,h2')]
+      .map(h => normalizeText(h.textContent))
+      .filter(t => t && !/siroi_human/i.test(t));
+    if (contentHeadings.length) name = contentHeadings[0].replace(/\s*>\s*データ$/, '');
+
+    let rarity = '';
+    let c
