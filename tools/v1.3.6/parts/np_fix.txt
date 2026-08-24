@@ -1,0 +1,60 @@
+
+  // v1.3.6: 強化後宝具を同一宝具の最新版として確実に扱う。
+  function inferNpName(text) {
+    const lines = normalizeText(text).split(/\n+/).map(normalizeText).filter(Boolean);
+    const headerIndex = lines.findIndex(line => /Card/.test(line) && /ランク/.test(line) && /効果/.test(line));
+    const candidates = (headerIndex >= 0 ? lines.slice(0, headerIndex) : lines.slice(0, 3))
+      .filter(line => !/^強化後(?:\s|$|[「（(])/.test(line) && !looksLikeEffectDescription(line));
+    return candidates.slice(0, 2).join(' / ') || '宝具';
+  }
+
+  function nearestNpSubheading(table, sectionHeading) {
+    const sectionLevel = headingLevel(sectionHeading);
+    let nearest = null;
+    for (const h of table?.ownerDocument?.querySelectorAll?.('h2,h3,h4,h5,h6') || []) {
+      if (h === sectionHeading || headingLevel(h) <= sectionLevel) continue;
+      const afterSection = sectionHeading.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_FOLLOWING;
+      const beforeTable = h.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING;
+      if (afterSection && beforeTable) nearest = h;
+    }
+    return nearest;
+  }
+
+  function npIdentity(name) {
+    return normalizeText(name)
+      .replace(/^強化後[^/]*\/\s*/, '')
+      .replace(/\s+/g, '')
+      .toLowerCase();
+  }
+
+  function extractNpBlocks(heading) {
+    const elements = collectSectionElements(heading);
+    const raw = collectNpTables(elements).map((table, index) => {
+      const tableText = normalizeText(table.innerText || table.textContent || '');
+      const context = inferNpContext(table);
+      const subheading = normalizeText(nearestNpSubheading(table, heading)?.textContent || '');
+      const combined = normalizeText(`${context}\n${tableText}`);
+      const name = inferNpName(tableText) || inferNpName(combined) || `宝具${index + 1}`;
+      return {
+        scope:'np',
+        name,
+        text:tableText || combined,
+        effectRows:extractEffectRowsFromElements([table]),
+        isStrengthenedNp:/^強化後(?:\s|$|[「（(])/.test(subheading) || /強化後/.test(context)
+      };
+    });
+    if (!raw.length) return [];
+
+    const blocks = [];
+    for (const block of raw) {
+      const previous = blocks[blocks.length - 1] || null;
+      const sameNp = previous && npIdentity(previous.name) && npIdentity(previous.name) === npIdentity(block.name);
+      if (previous && (block.isStrengthenedNp || sameNp)) {
+        blocks[blocks.length - 1] = block;
+      } else {
+        blocks.push(block);
+      }
+    }
+    return blocks;
+  }
+
