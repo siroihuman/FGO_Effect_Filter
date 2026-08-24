@@ -1,0 +1,101 @@
+w"><span class="ra-label">データ</span><div class="ra-tools"><button type="button" id="ra-load" class="ra-primary">データ読込</button><button type="button" id="ra-refresh">データ更新</button></div></div>
+          <div class="ra-progress"><div id="ra-progress-bar"></div></div>
+          <div class="ra-row"><span id="ra-status" class="ra-status">未読み込み</span><span id="ra-progress-label" class="ra-note"></span></div>
+        </div>
+      </div>
+
+      <div class="ra-panel">
+        <div class="ra-panel-head">検索条件</div>
+        <div class="ra-panel-body">
+          <div class="ra-row"><span class="ra-label">名前</span><input type="text" id="ra-keyword" placeholder="サーヴァント名で絞り込み"></div>
+          <div class="ra-row"><span class="ra-label">検索方法</span>
+            <label><input type="radio" name="ra-mode" value="and" checked> 選んだ効果をすべて満たす（AND）</label>
+            <label><input type="radio" name="ra-mode" value="or"> いずれかを満たす（OR）</label>
+          </div>
+          <div class="ra-row"><span class="ra-label">対象</span>
+            ${TARGETS.map(t => `<label class="ra-chip"><input type="checkbox" name="ra-target" value="${t.id}"><span>${t.label}</span></label>`).join('')}
+          </div>
+          <div class="ra-note">対象を未選択にすると「対象を問わない」検索になります。対象判定は効果文中の「自身／味方全体／敵単体」等から行います。</div>
+          <div class="ra-row"><span class="ra-label">クラス</span>
+            ${CLASS_ORDER.map(c => `<label class="ra-chip"><input type="checkbox" name="ra-class" value="${c}"><span>${CLASS_LABELS[c]} ${c}</span></label>`).join('')}
+          </div>
+          <div class="ra-row"><span class="ra-label">レアリティ</span>
+            ${[1,2,3,4,5].map(r => `<label class="ra-chip"><input type="checkbox" name="ra-rarity" value="${r}"><span>${'★'.repeat(r)}</span></label>`).join('')}
+          </div>
+          <details class="ra-trait-selector">
+            <summary>サーヴァント特性 <small id="ra-trait-count">0項目</small></summary>
+            <div class="ra-row"><span class="ra-label">候補検索</span><input type="text" id="ra-trait-filter" placeholder="例：神性、人類の脅威"></div>
+            <div class="ra-note">個別ページの「特性」欄から候補を自動生成し、「各特性持ち編集」の分類・並び順を参考にカテゴリ分けします。複数選択できます。</div>
+            <div id="ra-trait-options" class="ra-chip-grid ra-trait-options"><div class="ra-note">データ読込後に特性候補が表示されます。</div></div>
+            <div class="ra-row"><span class="ra-label">特性条件</span>
+              <label><input type="radio" name="ra-trait-mode" value="and" checked> 選んだ特性をすべて持つ（AND）</label>
+              <label><input type="radio" name="ra-trait-mode" value="or"> いずれかを持つ（OR）</label>
+            </div>
+          </details>
+          <div class="ra-row"><span class="ra-label">検索範囲</span>
+            <label class="ra-chip"><input type="checkbox" name="ra-scope" value="skill" checked><span>保有スキル</span></label>
+            <label class="ra-chip"><input type="checkbox" name="ra-scope" value="np" checked><span>宝具</span></label>
+            <label class="ra-chip"><input type="checkbox" name="ra-scope" value="classSkill"><span>クラススキル</span></label>
+          </div>
+          <div class="ra-row"><span class="ra-label">結果表示</span>
+            <label><input type="checkbox" id="ra-limit-top-abilities"> スキル上位3つ・宝具上位1つのみ表示</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="ra-panel">
+        <div class="ra-panel-head">効果を選択</div>
+        <div class="ra-panel-body">
+          <div class="ra-tools"><button type="button" id="ra-all-on">全効果を選択</button><button type="button" id="ra-all-off">全効果を解除</button></div>
+          ${EFFECT_GROUPS.map(effectGroupHtml).join('')}
+          <div class="ra-rate-box">
+            <div class="ra-rate-title">効果倍率（任意）</div>
+            <div class="ra-note">選択した効果ごとに倍率条件を指定できます。判定には効果行の末尾値（スキルはLv.10、宝具は表の末尾、固定効果は固定値）を使用します。</div>
+            <div id="ra-rate-conditions"><div class="ra-note">効果を選択すると、その効果ごとに倍率条件を指定できます。</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ra-row ra-tools"><button type="button" id="ra-search" class="ra-primary">この条件で検索</button><button type="button" id="ra-clear">条件クリア</button></div>
+      <div class="ra-result-head"><strong>検索結果</strong><strong id="ra-result-count">0騎</strong></div>
+      <div id="ra-results"><div class="ra-empty">検索条件を選択してください。</div></div>
+      <div class="ra-note">Ra_FGOEffectFilter v${VERSION} / Author: argyi</div>
+    `;
+
+    state.elements = {
+      root,
+      loadButton: root.querySelector('#ra-load'),
+      refreshButton: root.querySelector('#ra-refresh'),
+      searchButton: root.querySelector('#ra-search'),
+      status: root.querySelector('#ra-status'),
+      progressBar: root.querySelector('#ra-progress-bar'),
+      progressLabel: root.querySelector('#ra-progress-label'),
+      keyword: root.querySelector('#ra-keyword'),
+      resultCount: root.querySelector('#ra-result-count'),
+      results: root.querySelector('#ra-results'),
+      rateConditions: root.querySelector('#ra-rate-conditions'),
+      traitOptions: root.querySelector('#ra-trait-options'),
+      traitFilter: root.querySelector('#ra-trait-filter'),
+      traitCount: root.querySelector('#ra-trait-count'),
+      limitTopAbilities: root.querySelector('#ra-limit-top-abilities')
+    };
+
+    state.elements.loadButton.addEventListener('click', () => loadAllData(false));
+    state.elements.refreshButton.addEventListener('click', () => loadAllData(true));
+    state.elements.limitTopAbilities?.addEventListener('change', () => { if (state.records.length) renderResults(searchRecords()); });
+    state.elements.searchButton.addEventListener('click', async () => {
+      if (!state.records.length) await loadAllData(false);
+      if (state.records.length) renderResults(searchRecords());
+    });
+    root.querySelector('#ra-clear').addEventListener('click', clearFilters);
+    root.querySelector('#ra-all-on').addEventListener('click', () => toggleAllEffects(true));
+    root.querySelector('#ra-all-off').addEventListener('click', () => toggleAllEffects(false));
+    root.querySelectorAll('input[name="ra-effect"]').forEach(el => el.addEventListener('change', updateRateConditionUI));
+    updateRateConditionUI();
+    state.elements.traitFilter?.addEventListener('input', filterTraitOptions);
+    state.elements.keyword.addEventListener('keydown', e => {
+      if (e.key === 'Enter') state.elements.searchButton.click();
+    });
+
+    return root;
+  }
