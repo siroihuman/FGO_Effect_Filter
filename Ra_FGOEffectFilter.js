@@ -22,11 +22,13 @@
     'tools/v1.3.5/parts/p05.txt',
     'tools/v1.3.5/parts/p06.txt',
     'tools/v1.3.6/parts/p07a.txt',
+    'tools/v1.3.6/parts/nl.txt',
     'tools/v1.3.6/parts/np_fix.txt',
-    'tools/v1.3.6/parts/p07b.txt'
+    'tools/v1.3.6/parts/p07b.txt',
+    'tools/v1.3.6/parts/nl.txt'
   ];
-  const EXPECTED_SOURCE_LENGTH = 73082;
-  const EXPECTED_UTF8_LENGTH = 81370;
+  const EXPECTED_SOURCE_LENGTH = 73084;
+  const EXPECTED_UTF8_LENGTH = 81372;
 
   function assetUrl(path) {
     try {
