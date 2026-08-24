@@ -1,0 +1,177 @@
+"ra-result-trait-list">${traitList.map(trait => {
+            const matched = selectedTraits.includes(trait.name);
+            const condition = trait.condition ? `<small class="ra-trait-stage">※ ${escapeHtml(trait.condition)}</small>` : '';
+            return `<span class="ra-result-trait${matched ? ' is-match' : ''}"><span>${escapeHtml(trait.name)}</span>${condition}</span>`;
+          }).join('')}</div></div>`
+        : '<div class="ra-result-traits"><strong>特性</strong><span class="ra-note">特性データなし</span></div>';
+      return `<article class="ra-result-card">
+        <div class="ra-result-title"><span class="ra-class-badge">${escapeHtml(clsShort)}</span><span class="ra-stars">${escapeHtml(stars)}</span><a href="${escapeHtml(record.url)}">${escapeHtml(record.name)}</a>${record.no ? `<span class="ra-no">No.${escapeHtml(record.no)}</span>` : ''}</div>
+        ${traitsHtml}
+        ${blocks || '<div class="ra-hit">該当効果あり</div>'}
+      </article>`;
+    }).join('');
+  }
+
+  function syncRateConditionsFromUI() {
+    const box = state.elements.rateConditions;
+    if (!box) return;
+    for (const row of box.querySelectorAll('[data-rate-effect]')) {
+      const id = row.dataset.rateEffect;
+      const operator = row.querySelector('select')?.value || 'gte';
+      const value = row.querySelector('input[type="number"]')?.value ?? '';
+      state.rateConditions[id] = { operator, value };
+    }
+  }
+
+  function updateRateConditionUI() {
+    const box = state.elements.rateConditions;
+    if (!box) return;
+    syncRateConditionsFromUI();
+    const selected = getChecked('ra-effect');
+    if (!selected.length) {
+      box.innerHTML = '<div class="ra-note">効果を選択すると、その効果ごとに倍率条件を指定できます。</div>';
+      return;
+    }
+    box.innerHTML = selected.map(id => {
+      const effect = EFFECT_MAP.get(id);
+      const saved = state.rateConditions[id] || { operator:'gte', value:'' };
+      return `<div class="ra-rate-condition" data-rate-effect="${escapeHtml(id)}">
+        <span class="ra-rate-effect-name">${escapeHtml(effect?.label || id)}</span>
+        <select aria-label="倍率比較">
+          <option value="gte"${saved.operator === 'gte' ? ' selected' : ''}>以上</option>
+          <option value="lte"${saved.operator === 'lte' ? ' selected' : ''}>以下</option>
+          <option value="eq"${saved.operator === 'eq' ? ' selected' : ''}>一致</option>
+        </select>
+        <input type="number" step="any" inputmode="decimal" value="${escapeHtml(saved.value)}" placeholder="例: 20" aria-label="倍率">
+      </div>`;
+    }).join('');
+    for (const row of box.querySelectorAll('[data-rate-effect]')) {
+      const save = () => syncRateConditionsFromUI();
+      row.querySelector('select')?.addEventListener('change', save);
+      row.querySelector('input')?.addEventListener('input', save);
+    }
+  }
+
+  function traitOptions() {
+    const traits = new Set();
+    for (const record of state.records) {
+      for (const trait of traitNames(record)) traits.add(trait);
+    }
+    return [...traits];
+  }
+
+  function traitCategoryMap() {
+    const map = new Map();
+    for (const item of state.traitCatalog) {
+      const name = canonicalTraitName(item?.name);
+      if (name && !map.has(name)) map.set(name, canonicalTraitCategory(item?.category) || fallbackTraitCategory(name));
+    }
+    return map;
+  }
+
+  function traitCategoryGroups(traits) {
+    const catalogMap = traitCategoryMap();
+    const groups = new Map();
+    for (const rawTrait of traits) {
+      const trait = canonicalTraitName(rawTrait);
+      if (!trait) continue;
+      let category = canonicalTraitCategory(catalogMap.get(trait) || fallbackTraitCategory(trait));
+      if (trait === '夏モード' || trait === '霊衣を持つ者') category = '特殊特性２';
+      if (trait === 'ヒト科以外') {
+        const humanCategory = canonicalTraitCategory(catalogMap.get('ヒト科') || '通常特性１');
+        category = TRAIT_CATEGORY_ORDER.includes(humanCategory) ? humanCategory : '通常特性１';
+      }
+      if (!TRAIT_CATEGORY_ORDER.includes(category)) category = 'その他・個別';
+      if (!groups.has(category)) groups.set(category, []);
+      if (!groups.get(category).includes(trait)) groups.get(category).push(trait);
+    }
+    const orderIndex = new Map();
+    state.traitCatalog.forEach((item,index) => {
+      const name = canonicalTraitName(item?.name);
+      if (name && !orderIndex.has(name)) orderIndex.set(name, index);
+    });
+    for (const list of groups.values()) {
+      list.sort((a,b) => {
+        if (a === 'ヒト科以外' && b === 'ヒト科') return 1;
+        if (a === 'ヒト科' && b === 'ヒト科以外') return -1;
+        const ai = orderIndex.has(a) ? orderIndex.get(a) : Number.MAX_SAFE_INTEGER;
+        const bi = orderIndex.has(b) ? orderIndex.get(b) : Number.MAX_SAFE_INTEGER;
+        return ai !== bi ? ai - bi : a.localeCompare(b, 'ja');
+      });
+      const humanIndex = list.indexOf('ヒト科');
+      const nonHumanIndex = list.indexOf('ヒト科以外');
+      if (humanIndex >= 0 && nonHumanIndex >= 0 && nonHumanIndex !== humanIndex + 1) {
+        list.splice(nonHumanIndex, 1);
+        list.splice(list.indexOf('ヒト科') + 1, 0, 'ヒト科以外');
+      }
+    }
+    const ordered = TRAIT_CATEGORY_ORDER.filter(category => groups.has(category))
+      .map(category => ({ category, traits:groups.get(category) }));
+    for (const [category, list] of groups) {
+      if (!TRAIT_CATEGORY_ORDER.includes(category)) ordered.push({ category, traits:list });
+    }
+    return ordered;
+  }
+
+  function filterTraitOptions() {
+    const box = state.elements.traitOptions;
+    if (!box) return;
+    const keyword = normalizeText(state.elements.traitFilter?.value || '').toLowerCase();
+    for (const group of box.querySelectorAll('.ra-trait-category')) {
+      let visible = 0;
+      for (const label of group.querySelectorAll('.ra-trait-chip')) {
+        const text = normalizeText(label.textContent).toLowerCase();
+        label.hidden = Boolean(keyword && !text.includes(keyword));
+        if (!label.hidden) visible++;
+      }
+      group.hidden = visible === 0;
+    }
+    for (const row of box.querySelectorAll('.ra-trait-category-row')) {
+      row.hidden = [...row.querySelectorAll('.ra-trait-category')].every(group => group.hidden);
+    }
+  }
+
+  function renderTraitOptions() {
+    const box = state.elements.traitOptions;
+    if (!box) return;
+    const selected = new Set(getChecked('ra-trait'));
+    const traits = traitOptions();
+    if (state.elements.traitCount) state.elements.traitCount.textContent = `${traits.length}項目`;
+    if (!traits.length) {
+      box.innerHTML = '<div class="ra-note">データ読込後に特性候補が表示されます。</div>';
+      return;
+    }
+    const groups = traitCategoryGroups(traits);
+    const groupMap = new Map(groups.map(group => [group.category, group.traits]));
+    const fixedRows = TRAIT_CATEGORY_ROWS.map(row => {
+      const sections = row.map(category => {
+        const items = groupMap.get(category) || [];
+        groupMap.delete(category);
+        return `<section class="ra-trait-category" data-trait-category="${escapeHtml(category)}">
+          <div class="ra-trait-category-title">${escapeHtml(category)} <small>${items.length}項目</small></div>
+          <div class="ra-chip-grid">${items.map(trait => `<label class="ra-chip ra-trait-chip"><input type="checkbox" name="ra-trait" value="${escapeHtml(trait)}"${selected.has(trait) ? ' checked' : ''}><span>${escapeHtml(trait)}</span></label>`).join('')}</div>
+        </section>`;
+      });
+      return `<div class="ra-trait-category-row">${sections.join('')}</div>`;
+    }).join('');
+    const extras = [...groupMap.entries()].map(([category,items]) => `<div class="ra-trait-category-row"><section class="ra-trait-category" data-trait-category="${escapeHtml(category)}">
+      <div class="ra-trait-category-title">${escapeHtml(category)} <small>${items.length}項目</small></div>
+      <div class="ra-chip-grid">${items.map(trait => `<label class="ra-chip ra-trait-chip"><input type="checkbox" name="ra-trait" value="${escapeHtml(trait)}"${selected.has(trait) ? ' checked' : ''}><span>${escapeHtml(trait)}</span></label>`).join('')}</div>
+    </section></div>`).join('');
+    box.innerHTML = fixedRows + extras;
+    filterTraitOptions();
+  }
+
+  function clearFilters() {
+    state.elements.root.querySelectorAll('input[name="ra-effect"],input[name="ra-target"],input[name="ra-class"],input[name="ra-rarity"],input[name="ra-trait"]').forEach(el => { el.checked = false; });
+    state.elements.root.querySelectorAll('input[name="ra-scope"]').forEach(el => { el.checked = el.value !== 'classSkill'; });
+    const limitTop = state.elements.root.querySelector('#ra-limit-top-abilities');
+    if (limitTop) limitTop.checked = false;
+    state.elements.root.querySelector('input[name="ra-mode"][value="and"]').checked = true;
+    state.elements.root.querySelector('input[name="ra-trait-mode"][value="and"]').checked = true;
+    state.elements.keyword.value = '';
+    if (state.elements.traitFilter) state.elements.traitFilter.value = '';
+    filterTraitOptions();
+    state.rateConditions = {};
+    updateRateConditionUI();
+    if (stat
