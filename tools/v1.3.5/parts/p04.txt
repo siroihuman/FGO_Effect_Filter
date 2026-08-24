@@ -1,0 +1,195 @@
+e.elements.refreshButton.disabled = true;
+    state.elements.searchButton.disabled = true;
+    state.failures = [];
+    try {
+      setStatus('サーヴァント一覧を取得しています…');
+      setProgress(0, 0);
+      const [indexHtml] = await Promise.all([fetchText(INDEX_URL), loadTraitCatalog()]);
+      const urls = extractServantLinks(parseHtml(indexHtml));
+      if (!urls.length) throw new Error('サーヴァントURLを取得できませんでした。');
+      setStatus(`${urls.length}騎を読み込んでいます…`);
+      const results = await mapWithConcurrency(urls, FETCH_CONCURRENCY, parseServant, (done,total) => {
+        setProgress(done,total);
+        setStatus(`サーヴァントデータ読込中：${done} / ${total}`);
+      });
+      state.records = results.filter(r => r && !r.__error);
+      state.failures = results.filter(r => r?.__error);
+      state.loadedAt = Date.now();
+      renderTraitOptions();
+      saveCache();
+      const failureText = state.failures.length ? ` / 読込失敗 ${state.failures.length}件` : '';
+      setStatus(`読込完了：${state.records.length}騎${failureText}`, state.failures.length ? 'warn' : 'ok');
+      renderResults(searchRecords());
+    } catch (error) {
+      console.error('[Ra_FGOEffectFilter]', error);
+      setStatus(`読込エラー：${error?.message || error}`, 'error');
+    } finally {
+      state.loading = false;
+      state.elements.loadButton.disabled = false;
+      state.elements.refreshButton.disabled = false;
+      state.elements.searchButton.disabled = false;
+    }
+  }
+
+  function getChecked(name) {
+    return [...state.elements.root.querySelectorAll(`input[name="${name}"]:checked`)].map(el => el.value);
+  }
+
+  function getRateCondition(effectId) {
+    const condition = state.rateConditions[effectId];
+    if (!condition || condition.value === '' || condition.value == null) return null;
+    const value = Number(condition.value);
+    if (!Number.isFinite(value)) return null;
+    return { operator:condition.operator || 'gte', value };
+  }
+
+  function ratePasses(actual, condition) {
+    if (!condition) return true;
+    if (!Number.isFinite(actual)) return false;
+    if (condition.operator === 'lte') return actual <= condition.value;
+    if (condition.operator === 'eq') return Math.abs(actual - condition.value) < 1e-9;
+    return actual >= condition.value;
+  }
+
+  function occurrencePasses(occurrence, selectedTargets, rateCondition) {
+    if (selectedTargets.length) {
+      if (!occurrence?.target || !selectedTargets.includes(occurrence.target)) return false;
+    }
+    return ratePasses(occurrence?.finalValue, rateCondition);
+  }
+
+  function effectMatchesAbility(ability, effectId, selectedTargets) {
+    const e = ability.effects.find(x => x.id === effectId);
+    if (!e) return false;
+    const rateCondition = getRateCondition(effectId);
+
+    if (Array.isArray(e.occurrences) && e.occurrences.length) {
+      return e.occurrences.some(occ => occurrencePasses(occ, selectedTargets, rateCondition));
+    }
+
+    // 特殊ページのフォールバック。倍率指定時は値を判定できないため不一致。
+    if (rateCondition) return false;
+    if (!selectedTargets.length) return true;
+    if (!e.targets.length) return false;
+    return selectedTargets.some(t => e.targets.includes(t));
+  }
+
+  function rowMatchesSelected(row, selectedEffects, selectedTargets) {
+    if (!selectedEffects.length) return false;
+    return selectedEffects.some(effectId => {
+      if (!row.effectIds?.includes(effectId)) return false;
+      if (selectedTargets.length && (!row.target || !selectedTargets.includes(row.target))) return false;
+      return ratePasses(row.finalValue, getRateCondition(effectId));
+    });
+  }
+
+  function limitTopAbilitiesEnabled() {
+    return Boolean(state.elements.root?.querySelector('#ra-limit-top-abilities')?.checked);
+  }
+
+  function abilityWithinTopLimit(ability) {
+    if (!limitTopAbilitiesEnabled()) return true;
+    if (ability.scope === 'skill') {
+      const explicit = normalizeText(ability.name).match(/^Skill\s*(\d+)/i);
+      if (explicit) return Number(explicit[1]) <= 3;
+      return !ability.scopeIndex || Number(ability.scopeIndex) <= 3;
+    }
+    if (ability.scope === 'np') return !ability.scopeIndex || Number(ability.scopeIndex) <= 1;
+    return true;
+  }
+
+  function searchRecords() {
+    const selectedEffects = getChecked('ra-effect');
+    const selectedTargets = getChecked('ra-target');
+    const selectedClasses = getChecked('ra-class');
+    const selectedRarities = getChecked('ra-rarity');
+    const selectedTraits = getChecked('ra-trait');
+    const scopes = getChecked('ra-scope');
+    const mode = state.elements.root.querySelector('input[name="ra-mode"]:checked')?.value || 'and';
+    const traitMode = state.elements.root.querySelector('input[name="ra-trait-mode"]:checked')?.value || 'and';
+    const keyword = normalizeText(state.elements.keyword.value).toLowerCase();
+
+    return state.records.map(record => {
+      if (selectedClasses.length && !selectedClasses.includes(record.className)) return null;
+      if (selectedRarities.length && !selectedRarities.includes(record.rarity)) return null;
+      if (selectedTraits.length) {
+        const traits = traitNames(record);
+        const traitBooleans = selectedTraits.map(trait => traits.includes(trait));
+        const traitPassed = traitMode === 'and' ? traitBooleans.every(Boolean) : traitBooleans.some(Boolean);
+        if (!traitPassed) return null;
+      }
+      if (keyword && !normalizeText(record.name).toLowerCase().includes(keyword)) return null;
+
+      const abilities = record.abilities.filter(a => scopes.includes(a.scope) && abilityWithinTopLimit(a));
+      const effectBooleans = selectedEffects.map(effectId => abilities.some(a => effectMatchesAbility(a, effectId, selectedTargets)));
+      if (selectedEffects.length) {
+        const passed = mode === 'and' ? effectBooleans.every(Boolean) : effectBooleans.some(Boolean);
+        if (!passed) return null;
+      }
+
+      const matchedAbilities = abilities.filter(a => {
+        if (!selectedEffects.length) return true;
+        return selectedEffects.some(effectId => effectMatchesAbility(a, effectId, selectedTargets));
+      });
+      return { record, matchedAbilities };
+    }).filter(Boolean);
+  }
+
+  function scopeLabel(scope) {
+    return scope === 'np' ? '宝具' : scope === 'classSkill' ? 'クラススキル' : '保有スキル';
+  }
+
+  function renderEffectRow(row, selectedEffects, selectedTargets) {
+    const matched = rowMatchesSelected(row, selectedEffects, selectedTargets);
+    const valueText = row.values?.length
+      ? `<span class="ra-rate"><strong>倍率</strong> ${escapeHtml(row.values.map(v => v.raw).join(' / '))}</span>`
+      : '';
+    const text = matched
+      ? `<mark>${escapeHtml(row.text)}</mark>`
+      : escapeHtml(row.text);
+    return `<div class="ra-effect-line${matched ? ' is-match' : ''}"><span class="ra-effect-text">${text}</span>${valueText}</div>`;
+  }
+
+  function renderAbility(ability, selectedEffects, selectedTargets) {
+    const rows = Array.isArray(ability.effectRows) && ability.effectRows.length
+      ? ability.effectRows
+      : extractEffectRowsFromText(ability.text).map((row, rowIndex) => ({ ...row, rowIndex, effectIds:[], finalValue:null, target:null }));
+    const body = rows.length
+      ? rows.map(row => renderEffectRow(row, selectedEffects, selectedTargets)).join('')
+      : `<div class="ra-effect-line">${escapeHtml(ability.text)}</div>`;
+    return `<div class="ra-hit">
+      <div class="ra-hit-head"><span class="ra-scope-badge">${escapeHtml(scopeLabel(ability.scope))}</span>${escapeHtml(ability.name || scopeLabel(ability.scope))}</div>
+      <div class="ra-effect-lines">${body}</div>
+    </div>`;
+  }
+
+  function abilitiesForDisplay(abilities) {
+    return abilities.filter(abilityWithinTopLimit);
+  }
+
+  function renderResults(matches) {
+    const out = state.elements.results;
+    const selectedEffects = getChecked('ra-effect');
+    const selectedTargets = getChecked('ra-target');
+    const selectedTraits = getChecked('ra-trait');
+    state.elements.resultCount.textContent = `${matches.length}騎`;
+    if (!matches.length) {
+      out.innerHTML = '<div class="ra-empty">条件に一致するサーヴァントは見つかりませんでした。</div>';
+      return;
+    }
+
+    const sorted = [...matches].sort((a,b) => {
+      const ra = Number(a.record.rarity || 0), rb = Number(b.record.rarity || 0);
+      if (rb !== ra) return rb - ra;
+      const ca = CLASS_ORDER.indexOf(a.record.className), cb = CLASS_ORDER.indexOf(b.record.className);
+      if (ca !== cb) return ca - cb;
+      return String(a.record.no).localeCompare(String(b.record.no), 'ja', { numeric:true });
+    });
+
+    out.innerHTML = sorted.map(({record, matchedAbilities}) => {
+      const stars = record.rarity ? '★'.repeat(Number(record.rarity)) : '★?';
+      const clsShort = CLASS_LABELS[record.className] || record.className || '不明';
+      const blocks = abilitiesForDisplay(matchedAbilities).map(a => renderAbility(a, selectedEffects, selectedTargets)).join('');
+      const traitList = traitEntries(record);
+      const traitsHtml = traitList.length
+        ? `<div class="ra-result-traits"><strong>特性</strong><div class=
