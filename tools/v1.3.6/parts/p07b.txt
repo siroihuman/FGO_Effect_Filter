@@ -1,0 +1,28 @@
+  function mount() {
+    if (document.getElementById('ra-fgo-effect-filter')) return;
+    const root = createUI();
+    if (scriptElement?.parentNode && document.body?.contains(scriptElement)) {
+      scriptElement.parentNode.insertBefore(root, scriptElement.nextSibling);
+    } else {
+      const candidates = ['#content','main','.atwiki-page-body','.wiki-body','.atwiki-body'];
+      const target = candidates.map(s => document.querySelector(s)).find(Boolean) || document.body;
+      target.appendChild(root);
+    }
+
+    if (loadCache()) {
+      renderTraitOptions();
+      const time = new Date(state.loadedAt).toLocaleString('ja-JP');
+      setStatus(`キャッシュ読込済み：${state.records.length}騎（${time}）${state.failures.length ? ` / 読込失敗 ${state.failures.length}件` : ''}`, state.failures.length ? 'warn' : 'ok');
+      setProgress(state.records.length, state.records.length);
+      if (!state.traitCatalog.length) {
+        loadTraitCatalog().then(() => { renderTraitOptions(); saveCache(); });
+      }
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mount, { once:true });
+  } else {
+    mount();
+  }
+})();
