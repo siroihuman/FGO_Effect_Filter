@@ -1,7 +1,7 @@
 /*
  * Ra_FGOEffectFilter.js
  * @wiki / siroi_human 用 FGOスキル・宝具・特性検索 bootstrap
- * Version: 1.3.4
+ * Version: 1.3.5
  * Author: argyi
  */
 (() => {
@@ -12,39 +12,19 @@
   const current = document.currentScript;
   const FALLBACK_BASE = 'https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@main/';
   const PART_PATHS = [
-    'tools/v1.3.4/chunks/p00.b64',
-    'tools/v1.3.4/chunks/p01a.b64',
-    'tools/v1.3.4/chunks/p01b.b64',
-    'tools/v1.3.4/chunks/p02.b64',
-    'tools/v1.3.4/chunks/p03.b64',
-    'tools/v1.3.4/chunks/p04.b64',
-    'tools/v1.3.4/chunks/p05a.b64',
-    'tools/v1.3.4/chunks/p05b.b64',
-    'tools/v1.3.4/chunks/p06.b64',
-    'tools/v1.3.4/chunks/p07.b64',
-    'tools/v1.3.4/chunks/p08a.b64',
-    'tools/v1.3.4/chunks/p08b.b64',
-    'tools/v1.3.4/chunks/p09.b64',
-    'tools/v1.3.4/chunks/p10.b64',
-    'tools/v1.3.4/chunks/p11.b64',
-    'tools/v1.3.4/chunks/p12a.b64',
-    'tools/v1.3.4/chunks/p12b.b64',
-    'tools/v1.3.4/chunks/p13.b64',
-    'tools/v1.3.4/chunks/p14.b64',
-    'tools/v1.3.4/chunks/p15.b64',
-    'tools/v1.3.4/chunks/p16.b64',
-    'tools/v1.3.4/chunks/p17.b64',
-    'tools/v1.3.4/chunks/p18.b64',
-    'tools/v1.3.4/chunks/p19.b64',
-    'tools/v1.3.4/chunks/p20.b64',
-    'tools/v1.3.4/chunks/p21.b64',
-    'tools/v1.3.4/chunks/p22.b64',
-    'tools/v1.3.4/chunks/p23.b64',
-    'tools/v1.3.4/chunks/p24.b64',
-    'tools/v1.3.4/chunks/p25.b64',
-    'tools/v1.3.4/chunks/p26.b64'
+    'tools/v1.3.5/parts/p00a.txt',
+    'tools/v1.3.5/parts/p00b.txt',
+    'tools/v1.3.5/parts/p00c.txt',
+    'tools/v1.3.5/parts/p01.txt',
+    'tools/v1.3.5/parts/p02.txt',
+    'tools/v1.3.5/parts/p03.txt',
+    'tools/v1.3.5/parts/p04.txt',
+    'tools/v1.3.5/parts/p05.txt',
+    'tools/v1.3.5/parts/p06.txt',
+    'tools/v1.3.5/parts/p07.txt'
   ];
-  const EXPECTED_BASE64_LENGTH = 26432;
+  const EXPECTED_SOURCE_LENGTH = 70481;
+  const EXPECTED_UTF8_LENGTH = 78665;
 
   function assetUrl(path) {
     try {
@@ -65,16 +45,19 @@
 
   async function boot() {
     try {
-      if (typeof DecompressionStream !== 'function') throw new Error('このブラウザはDecompressionStreamに対応していません。最新版のEdge / Chrome等で開いてください。');
       const responses = await Promise.all(PART_PATHS.map(path => fetch(assetUrl(path), { cache: 'no-cache' })));
-      responses.forEach((response,index) => { if (!response.ok) throw new Error(`本体データ取得エラー: ${PART_PATHS[index]} / HTTP ${response.status}`); });
+      responses.forEach((response,index) => {
+        if (!response.ok) throw new Error(`本体データ取得エラー: ${PART_PATHS[index]} / HTTP ${response.status}`);
+      });
       const parts = await Promise.all(responses.map(response => response.text()));
-      const base64 = parts.join('').replace(/\s+/g, '');
-      if (base64.length !== EXPECTED_BASE64_LENGTH) throw new Error(`本体データ長が不正です: ${base64.length} / ${EXPECTED_BASE64_LENGTH}`);
-      const compressed = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-      const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip'));
-      const code = await new Response(stream).text();
-      if (!/Version:\s*1\.3\.4/.test(code) || !/const VERSION = '1\.3\.4';/.test(code)) throw new Error('本体バージョンの検証に失敗しました。');
+      const code = parts.join('');
+      const byteLength = new TextEncoder().encode(code).length;
+      if (code.length !== EXPECTED_SOURCE_LENGTH || byteLength !== EXPECTED_UTF8_LENGTH) {
+        throw new Error(`本体データ長が不正です: ${code.length}/${byteLength} / ${EXPECTED_SOURCE_LENGTH}/${EXPECTED_UTF8_LENGTH}`);
+      }
+      if (!/Version:\s*1\.3\.5/.test(code) || !/const VERSION = '1\.3\.5';/.test(code)) {
+        throw new Error('本体バージョンの検証に失敗しました。');
+      }
       const script = document.createElement('script');
       script.textContent = `${code}\n//# sourceURL=Ra_FGOEffectFilter.source.js`;
       (current?.parentNode || document.head || document.documentElement).appendChild(script);
