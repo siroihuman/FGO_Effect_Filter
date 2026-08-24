@@ -1,0 +1,92 @@
+e.records.length) renderResults(searchRecords());
+    else { state.elements.results.innerHTML = '<div class="ra-empty">検索条件を選択してください。</div>'; state.elements.resultCount.textContent = '0騎'; }
+  }
+
+  function toggleAllEffects(checked) {
+    state.elements.root.querySelectorAll('input[name="ra-effect"]').forEach(el => { el.checked = checked; });
+    updateRateConditionUI();
+  }
+
+  function effectGroupHtml(group) {
+    const checks = group.effects.map(e => `<label class="ra-chip"><input type="checkbox" name="ra-effect" value="${e.id}"><span>${escapeHtml(e.label)}</span></label>`).join('');
+    return `<details class="ra-effect-group"><summary>${escapeHtml(group.name)} <small>${group.effects.length}項目</small></summary><div class="ra-chip-grid">${checks}</div></details>`;
+  }
+
+  function createUI() {
+    const root = document.createElement('div');
+    root.id = 'ra-fgo-effect-filter';
+    root.innerHTML = `
+      <style>
+        #ra-fgo-effect-filter{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif;color:#222;line-height:1.55;margin:16px 0}
+        #ra-fgo-effect-filter *{box-sizing:border-box}
+        #ra-fgo-effect-filter .ra-panel{border:1px solid #d7dbe0;border-radius:10px;background:#fff;overflow:hidden;margin-bottom:14px}
+        #ra-fgo-effect-filter .ra-panel-head{padding:12px 14px;font-weight:700;background:#f4f6f8;border-bottom:1px solid #d7dbe0}
+        #ra-fgo-effect-filter .ra-panel-body{padding:12px 14px}
+        #ra-fgo-effect-filter .ra-note{font-size:12px;color:#666;margin:4px 0 10px}
+        #ra-fgo-effect-filter .ra-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0}
+        #ra-fgo-effect-filter .ra-label{font-weight:700;min-width:90px}
+        #ra-fgo-effect-filter .ra-chip-grid{display:flex;flex-wrap:wrap;gap:6px;padding:10px 0 2px}
+        #ra-fgo-effect-filter .ra-chip{position:relative;display:inline-flex;cursor:pointer;user-select:none}
+        #ra-fgo-effect-filter .ra-chip input{position:absolute;opacity:0;pointer-events:none}
+        #ra-fgo-effect-filter .ra-chip span{display:inline-block;padding:5px 9px;border:1px solid #c9cfd6;border-radius:6px;background:#fff;font-size:13px}
+        #ra-fgo-effect-filter .ra-chip input:checked+span{background:#27364a;color:#fff;border-color:#27364a}
+        #ra-fgo-effect-filter .ra-effect-group{border-top:1px solid #eceff2}
+        #ra-fgo-effect-filter .ra-effect-group:first-child{border-top:0}
+        #ra-fgo-effect-filter .ra-effect-group summary{cursor:pointer;padding:10px 2px;font-weight:700}
+        #ra-fgo-effect-filter .ra-effect-group summary small{font-weight:400;color:#777}
+        #ra-fgo-effect-filter input[type="text"]{width:min(360px,100%);padding:7px 9px;border:1px solid #c9cfd6;border-radius:6px}
+        #ra-fgo-effect-filter input[type="number"],#ra-fgo-effect-filter select{padding:6px 8px;border:1px solid #c9cfd6;border-radius:6px;background:#fff}
+        #ra-fgo-effect-filter input[type="number"]{width:100px}
+        #ra-fgo-effect-filter button{padding:7px 12px;border:1px solid #b9c0c8;border-radius:6px;background:#fff;cursor:pointer;font-weight:600}
+        #ra-fgo-effect-filter button:hover{background:#f2f4f6}
+        #ra-fgo-effect-filter button.ra-primary{background:#27364a;color:#fff;border-color:#27364a}
+        #ra-fgo-effect-filter button:disabled{opacity:.5;cursor:not-allowed}
+        #ra-fgo-effect-filter .ra-progress{height:7px;background:#e8ebef;border-radius:99px;overflow:hidden;margin:8px 0 3px}
+        #ra-fgo-effect-filter .ra-progress>div{height:100%;width:0;background:#586a81;transition:width .15s}
+        #ra-fgo-effect-filter .ra-status[data-kind="ok"]{color:#176b3a}.ra-status[data-kind="warn"]{color:#9a6412}.ra-status[data-kind="error"]{color:#a62828}
+        #ra-fgo-effect-filter .ra-result-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:16px 0 8px}
+        #ra-fgo-effect-filter .ra-result-card{border:1px solid #d7dbe0;border-radius:8px;background:#fff;margin:8px 0;overflow:hidden}
+        #ra-fgo-effect-filter .ra-result-title{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:9px 11px;background:#f7f8fa;border-bottom:1px solid #e4e7ea;font-weight:700}
+        #ra-fgo-effect-filter .ra-result-title a{font-size:16px;text-decoration:none}
+        #ra-fgo-effect-filter .ra-result-traits{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;padding:7px 11px;background:#fbfcfd;border-bottom:1px solid #edf0f3;font-size:12px}
+        #ra-fgo-effect-filter .ra-result-trait-list{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+        #ra-fgo-effect-filter .ra-result-trait{display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;padding:2px 7px;border:1px solid #d7dce2;border-radius:999px;background:#fff;color:#4b5968}
+        #ra-fgo-effect-filter .ra-trait-stage{font-size:10px;color:#9a5b12;font-weight:700}
+        #ra-fgo-effect-filter .ra-trait-category-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;border-top:1px dashed #e2e6ea;padding:8px 0}
+        #ra-fgo-effect-filter .ra-trait-category-row:first-child{border-top:0;padding-top:0}
+        #ra-fgo-effect-filter .ra-trait-category{min-width:0;padding:0}
+        #ra-fgo-effect-filter .ra-trait-category-title{font-weight:700;font-size:13px;margin-bottom:5px;color:#39495b}
+        #ra-fgo-effect-filter .ra-trait-category-title small{font-weight:400;color:#777}
+        #ra-fgo-effect-filter .ra-result-trait.is-match{background:#ffe27a;border-color:#e0bd38;color:#4a3a00;font-weight:700}
+        #ra-fgo-effect-filter .ra-trait-selector{width:100%;border-top:1px solid #eceff2;margin-top:4px;padding-top:4px}
+        #ra-fgo-effect-filter .ra-trait-selector summary{cursor:pointer;padding:8px 2px;font-weight:700}
+        #ra-fgo-effect-filter .ra-trait-selector summary small{font-weight:400;color:#777}
+        #ra-fgo-effect-filter .ra-trait-options{max-height:260px;overflow:auto;padding-right:4px}
+        #ra-fgo-effect-filter .ra-class-badge{display:inline-flex;align-items:center;justify-content:center;min-width:28px;padding:2px 6px;border-radius:4px;background:#333;color:#fff;font-size:12px}
+        #ra-fgo-effect-filter .ra-stars{font-size:12px}.ra-no{font-size:12px;color:#777;font-weight:400}
+        #ra-fgo-effect-filter .ra-hit{padding:8px 11px;border-top:1px dashed #e5e8eb;font-size:13px}
+        #ra-fgo-effect-filter .ra-hit:first-of-type{border-top:0}
+        #ra-fgo-effect-filter .ra-hit-head{font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+        #ra-fgo-effect-filter .ra-scope-badge{display:inline-flex;padding:1px 6px;border-radius:4px;background:#e9edf2;color:#445466;font-size:11px;font-weight:600}
+        #ra-fgo-effect-filter .ra-effect-lines{border:1px solid #edf0f3;border-radius:6px;overflow:hidden}
+        #ra-fgo-effect-filter .ra-effect-line{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:6px 8px;background:#fff}
+        #ra-fgo-effect-filter .ra-effect-line+.ra-effect-line{border-top:1px solid #edf0f3}
+        #ra-fgo-effect-filter .ra-effect-line.is-match{background:#fff9dd}
+        #ra-fgo-effect-filter .ra-effect-line mark{background:#ffe27a;color:inherit;font-weight:700;padding:1px 2px;border-radius:2px}
+        #ra-fgo-effect-filter .ra-effect-text{min-width:0;flex:1}
+        #ra-fgo-effect-filter .ra-rate{flex:0 0 auto;color:#4d5d70;font-size:12px;text-align:right;max-width:48%}
+        #ra-fgo-effect-filter .ra-rate strong{color:#27364a;margin-right:4px}
+        #ra-fgo-effect-filter .ra-rate-box{margin-top:12px;padding:10px;border:1px solid #dfe4e9;border-radius:8px;background:#fafbfc}
+        #ra-fgo-effect-filter .ra-rate-title{font-weight:700;margin-bottom:5px}
+        #ra-fgo-effect-filter .ra-rate-condition{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:6px 0;border-top:1px dashed #e2e6ea}
+        #ra-fgo-effect-filter .ra-rate-condition:first-child{border-top:0}
+        #ra-fgo-effect-filter .ra-rate-effect-name{min-width:180px;font-size:13px;font-weight:600}
+        #ra-fgo-effect-filter .ra-empty{padding:22px;text-align:center;color:#777;border:1px dashed #cfd5dc;border-radius:8px}
+        #ra-fgo-effect-filter .ra-tools{display:flex;flex-wrap:wrap;gap:6px}
+        @media(max-width:640px){#ra-fgo-effect-filter .ra-panel-body{padding:10px}#ra-fgo-effect-filter .ra-label{width:100%;min-width:0}#ra-fgo-effect-filter .ra-chip span{font-size:12px;padding:5px 7px}#ra-fgo-effect-filter .ra-effect-line{display:block}#ra-fgo-effect-filter .ra-rate{display:block;max-width:none;text-align:left;margin-top:4px}#ra-fgo-effect-filter .ra-rate-effect-name{width:100%;min-width:0}}
+      </style>
+      <div class="ra-panel">
+        <div class="ra-panel-head">FGO スキル・宝具・特性検索</div>
+        <div class="ra-panel-body">
+          <div class="ra-note">個別サーヴァントページの「保有スキル」「宝具」「クラススキル」を自動読取します。初回読込後はブラウザに24時間キャッシュします。</div>
+          <div class="ra-ro
