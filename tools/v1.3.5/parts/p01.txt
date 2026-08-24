@@ -1,0 +1,237 @@
+ibling;
+    }
+    return normalizeText(chunks.join('\n'));
+  }
+
+  function collectSectionElements(heading) {
+    if (!heading) return [];
+    const level = headingLevel(heading);
+    const elements = [];
+    let node = heading.nextElementSibling;
+    while (node) {
+      if (/^H[1-6]$/.test(node.tagName) && headingLevel(node) <= level) break;
+      elements.push(node);
+      node = node.nextElementSibling;
+    }
+    return elements;
+  }
+
+  function isNumericValueText(text) {
+    return /^[+-]?\d+(?:\.\d+)?(?:%|％)?$/.test(normalizeText(text));
+  }
+
+  function numericValue(text) {
+    const normalized = normalizeText(text).replace(/[％%]$/, '');
+    if (!/^[+-]?\d+(?:\.\d+)?$/.test(normalized)) return null;
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function looksLikeEffectDescription(text) {
+    const t = normalizeText(text);
+    if (!t || /^(?:CT|効果|Lv\.?\d*|Card|ランク|種別|1|2|3|4|5)$/.test(t)) return false;
+    if ([...EFFECT_MAP.values()].some(effect => effectTextMatches(effect, t))) return true;
+    return /(?:自身|味方|敵|NP|HP|スター|Quick|Arts|Buster|宝具|攻撃力|防御力|クリティカル|弱体|強化|無敵|回避|ガッツ|チャージ|特性|フィールド|コマンドカード|即死)[^。\n]{0,80}(?:アップ|ダウン|増やす|増加|減らす|減少|獲得|付与|解除|回復|攻撃|引き上げ|短縮|延長|固定|再配布|シャッフル|不能|無効|耐性|集中)/i.test(t)
+      || /^[＆＋+]/.test(t);
+  }
+
+  function splitTrailingValues(line) {
+    const tokens = normalizeText(line).split(/\s+/).filter(Boolean);
+    const values = [];
+    while (tokens.length && isNumericValueText(tokens[tokens.length - 1])) {
+      const raw = tokens.pop();
+      values.unshift({ raw, value:numericValue(raw) });
+    }
+    return { text:normalizeText(tokens.join(' ')), values };
+  }
+
+  function stripLeadingRowMetadata(text) {
+    let t = normalizeText(text);
+    t = t.replace(/^\d+(?:\.\d+)?\s+(?=(?:自身|味方|敵|[＆＋+]))/, '');
+    if (/^(?:Quick|Arts|Buster)\b/i.test(t)) {
+      const marker = t.search(/(?:自身|味方|敵|[＆＋+])/);
+      if (marker > 0) t = t.slice(marker);
+    }
+    return normalizeText(t);
+  }
+
+  function extractEffectRowsFromText(text) {
+    const rows = [];
+    for (const rawLine of normalizeText(text).split(/\n+/)) {
+      const line = normalizeText(rawLine);
+      if (!line || /^(?:CT\s+)?効果(?:\s+Lv\.|\s+1\s+2)/.test(line)) continue;
+      const parsed = splitTrailingValues(line);
+      parsed.text = stripLeadingRowMetadata(parsed.text);
+      if (!looksLikeEffectDescription(parsed.text)) continue;
+      rows.push({ text:parsed.text, values:parsed.values });
+    }
+    return rows;
+  }
+
+  function extractEffectRowsFromElements(elements) {
+    const rows = [];
+    const seenTables = new Set();
+    const tables = [];
+    for (const element of elements || []) {
+      if (element?.tagName === 'TABLE' && !seenTables.has(element)) {
+        seenTables.add(element); tables.push(element);
+      }
+      for (const table of element?.querySelectorAll?.('table') || []) {
+        if (!seenTables.has(table)) { seenTables.add(table); tables.push(table); }
+      }
+    }
+
+    for (const table of tables) {
+      for (const tr of table.querySelectorAll('tr')) {
+        const cells = [...tr.children].filter(el => /^(?:TH|TD)$/.test(el.tagName));
+        if (!cells.length) continue;
+        const texts = cells.map(cell => normalizeText(cell.innerText || cell.textContent || ''));
+        const effectIndex = texts.findIndex(looksLikeEffectDescription);
+        if (effectIndex < 0) continue;
+        const effectText = texts[effectIndex];
+        const values = texts.slice(effectIndex + 1)
+          .filter(isNumericValueText)
+          .map(raw => ({ raw, value:numericValue(raw) }));
+        rows.push({ text:effectText, values });
+      }
+    }
+    return rows;
+  }
+
+  function inferNpName(text) {
+    const lines = normalizeText(text).split(/\n+/).map(normalizeText).filter(Boolean);
+    const headerIndex = lines.findIndex(line => /Card/.test(line) && /ランク/.test(line) && /効果/.test(line));
+    const candidates = (headerIndex >= 0 ? lines.slice(0, headerIndex) : lines.slice(0, 3))
+      .filter(line => line !== '強化後' && !looksLikeEffectDescription(line));
+    return candidates.slice(0, 2).join(' / ') || '宝具';
+  }
+
+  function collectNpTables(elements) {
+    const tables = [];
+    const seen = new Set();
+    for (const element of elements || []) {
+      const candidates = [];
+      if (element?.tagName === 'TABLE') candidates.push(element);
+      candidates.push(...(element?.querySelectorAll?.('table') || []));
+      for (const table of candidates) {
+        if (seen.has(table)) continue;
+        seen.add(table);
+        const text = normalizeText(table.innerText || table.textContent || '');
+        if (!/Card/i.test(text) || !/ランク/.test(text) || !/効果/.test(text)) continue;
+        if (extractEffectRowsFromElements([table]).length) tables.push(table);
+      }
+    }
+    return tables;
+  }
+
+  function inferNpContext(table) {
+    const parts = [];
+    let node = table?.previousElementSibling || null;
+    let steps = 0;
+    while (node && steps++ < 6) {
+      if (node.tagName === 'TABLE') break;
+      const text = normalizeText(node.innerText || node.textContent || '');
+      if (text && !/Card.*ランク.*効果/i.test(text)) parts.unshift(text);
+      if (/^H[1-6]$/.test(node.tagName)) break;
+      node = node.previousElementSibling;
+    }
+    return normalizeText(parts.join('\n'));
+  }
+
+  function extractNpBlocks(heading) {
+    const elements = collectSectionElements(heading);
+    const raw = collectNpTables(elements).map((table, index) => {
+      const tableText = normalizeText(table.innerText || table.textContent || '');
+      const context = inferNpContext(table);
+      const combined = normalizeText(`${context}\n${tableText}`);
+      return {
+        scope:'np',
+        name:inferNpName(combined) || `宝具${index + 1}`,
+        text:combined || tableText,
+        effectRows:extractEffectRowsFromElements([table]),
+        isStrengthenedNp:/強化後/.test(context)
+      };
+    });
+    if (!raw.length) return [];
+
+    // 強化後テーブルは直前の同一宝具を置き換える。
+    // 独立した宝具2以降は別ブロックとして保持し、表示制限時に宝具1のみ残せるようにする。
+    const blocks = [];
+    for (const block of raw) {
+      if (block.isStrengthenedNp && blocks.length) blocks[blocks.length - 1] = block;
+      else blocks.push(block);
+    }
+    return blocks;
+  }
+
+  function inferClassSkillName(table, index) {
+    const candidates = [];
+    for (const tr of table?.querySelectorAll?.('tr') || []) {
+      for (const cell of [...tr.children].filter(el => /^(?:TH|TD)$/.test(el.tagName))) {
+        candidates.push(normalizeText(cell.innerText || cell.textContent || ''));
+      }
+      if (candidates.length > 8) break;
+    }
+    const prev = table?.previousElementSibling;
+    if (prev) candidates.push(normalizeText(prev.innerText || prev.textContent || ''));
+    const picked = candidates.find(text => text && text.length <= 80
+      && !looksLikeEffectDescription(text)
+      && !isNumericValueText(text)
+      && !/^(?:CT|効果|Lv\.|Card|ランク|種別|編集)$/.test(text)
+      && !CLASS_ORDER.some(cls => text === cls));
+    return picked || `クラススキル${index}`;
+  }
+
+  function extractClassSkillBlocks(heading) {
+    const elements = collectSectionElements(heading);
+    const seen = new Set();
+    const tables = [];
+    for (const element of elements) {
+      if (element?.tagName === 'TABLE' && !seen.has(element)) { seen.add(element); tables.push(element); }
+      for (const table of element?.querySelectorAll?.('table') || []) {
+        if (!seen.has(table)) { seen.add(table); tables.push(table); }
+      }
+    }
+    const blocks = [];
+    let index = 1;
+    for (const table of tables) {
+      const effectRows = extractEffectRowsFromElements([table]);
+      if (!effectRows.length) continue;
+      const text = normalizeText(table.innerText || table.textContent || '');
+      blocks.push({ scope:'classSkill', name:inferClassSkillName(table, index++), text, effectRows });
+    }
+    return blocks;
+  }
+
+  function collectAbilityBlocks(doc) {
+    const blocks = [];
+    const headings = [...doc.querySelectorAll('h2,h3,h4,h5')];
+    let currentScope = null;
+
+    for (let i = 0; i < headings.length; i++) {
+      const h = headings[i];
+      const text = normalizeText(h.textContent);
+
+      if (/^保有スキル$/.test(text)) { currentScope = 'skill'; continue; }
+      if (/^クラススキル$/.test(text)) { currentScope = 'classSkill'; continue; }
+      if (/^宝具$/.test(text)) {
+        currentScope = 'np';
+        const npBlocks = extractNpBlocks(h);
+        if (npBlocks.length) blocks.push(...npBlocks);
+        else {
+          const sectionText = collectSectionText(h);
+          if (sectionText) blocks.push({ scope:'np', name:inferNpName(sectionText), text:sectionText, effectRows:extractEffectRowsFromText(sectionText) });
+        }
+        continue;
+      }
+
+      if (/^(?:プロフィール|ボイス|モーション|武器|設定|キャラクター詳細|パラメーター|基本情報|ステータス)$/.test(text)) {
+        currentScope = null;
+        continue;
+      }
+
+      if (currentScope === 'skill' && /^Skill\s*\d/i.test(text)) {
+        blocks.push({
+          scope:'skill',
+          name:text,
+          text:collectS
