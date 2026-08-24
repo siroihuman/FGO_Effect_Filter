@@ -48,7 +48,9 @@
     const blocks = [];
     for (const block of raw) {
       const previous = blocks[blocks.length - 1] || null;
-      const sameNp = previous && npIdentity(previous.name) && npIdentity(previous.name) === npIdentity(block.name);
+      const previousId = previous ? npIdentity(previous.name) : '';
+      const currentId = npIdentity(block.name);
+      const sameNp = previous && previousId && currentId && previousId !== '宝具' && currentId !== '宝具' && previousId === currentId;
       if (previous && (block.isStrengthenedNp || sameNp)) {
         blocks[blocks.length - 1] = block;
       } else {
