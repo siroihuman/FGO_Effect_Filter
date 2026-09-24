@@ -28,8 +28,8 @@
     'tools/v1.3.6/parts/p07b.txt',
     'tools/v1.3.6/parts/nl.txt'
   ];
-  const EXPECTED_SOURCE_LENGTH = 73186;
-  const EXPECTED_UTF8_LENGTH = 81474;
+  const EXPECTED_SOURCE_LENGTH = 80681;
+  const EXPECTED_UTF8_LENGTH = 89715;
 
   function assetUrl(path) {
     try {
