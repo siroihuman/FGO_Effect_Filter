@@ -1,0 +1,230 @@
+
+  // v1.3.8: 公式FGO Wiki検索と公式メタデータ補正。
+  const OFFICIAL_WIKI_ROOT = 'https://w.atwiki.jp/f_go';
+  const OFFICIAL_INDEX_URL = `${OFFICIAL_WIKI_ROOT}/pages/671.html`;
+
+  function sourceLabel(source) {
+    return source === 'official' ? '公式' : 'オリジナル';
+  }
+
+  function extractServantLinksBySource(indexDoc, source) {
+    const wikiPath = source === 'official' ? '/f_go/pages/' : '/siroi_human/pages/';
+    const table = [...indexDoc.querySelectorAll('table')].find(t => {
+      const txt = normalizeText(t.textContent || '');
+      const classHits = ['剣','弓','槍','騎','術','殺','狂'].filter(label => txt.includes(label)).length;
+      return txt.includes('C★') && txt.includes('SSR★★★★★') && classHits >= 5;
+    });
+    if (!table) throw new Error(`${sourceLabel(source)}サーヴァント一覧表を検出できませんでした。`);
+
+    const urls = [];
+    for (const a of table.querySelectorAll('a[href]')) {
+      const href = a.getAttribute('href') || '';
+      let url;
+      try { url = new URL(href, 'https://w.atwiki.jp/'); } catch (_) { continue; }
+      if (url.hostname !== 'w.atwiki.jp') continue;
+      if (!url.pathname.startsWith(wikiPath)) continue;
+      if (!/\/pages\/\d+\.html$/.test(url.pathname)) continue;
+      urls.push(`${url.origin}${url.pathname}`);
+    }
+    return [...new Set(urls)];
+  }
+
+  const canonicalTraitName_v136 = canonicalTraitName;
+  canonicalTraitName = function(value) {
+    const name = normalizeText(value);
+    const classMatch = name.match(/^(セイバー|アーチャー|ランサー|ライダー|キャスター|アサシン|バーサーカー|シールダー|ルーラー|アヴェンジャー|ムーンキャンサー|アルターエゴ|フォーリナー|プリテンダー|ビースト)クラスのサーヴァント$/);
+    if (classMatch) return classMatch[1];
+    if (name === '騎乗スキル') return '騎乗';
+    return canonicalTraitName_v136(value);
+  };
+
+  function parseOfficialMetadata(doc, url) {
+    const base = parseMetadata(doc, url);
+    let name = '';
+    let no = '';
+
+    // 公式Wikiではh1がサイト名なので、基本情報の「真名」を最優先する。
+    for (const tr of doc.querySelectorAll('tr')) {
+      const cells = [...tr.querySelectorAll('th,td')];
+      const texts = cells.map(cell => normalizeText(cell.textContent || ''));
+      for (let i = 0; i < texts.length; i++) {
+        if (texts[i] === '真名' && texts[i + 1]) {
+          const candidate = normalizeText(texts[i + 1]);
+          if (candidate && !/^Fate\/Grand Order @wiki/i.test(candidate)) {
+            name = candidate;
+            break;
+          }
+        }
+      }
+      if (name) break;
+    }
+
+    // 真名セルが取れない特殊ページでは、サイト名h1ではなくページ固有h2を使う。
+    if (!name) {
+      name = [...doc.querySelectorAll('h2')]
+        .map(h => normalizeText(h.textContent || ''))
+        .find(text => text
+          && !/^Fate\/Grand Order @wiki/i.test(text)
+          && !/^No\.\s*\d+/i.test(text)
+          && !/^(?:メニュー|コメント|更新履歴|ネタバレ)/.test(text)) || '';
+    }
+
+    // 最終フォールバックはdocument.titleからサイト名部分を除去。
+    if (!name) {
+      name = normalizeText(doc.title || '')
+        .replace(/\s*-\s*Fate\/Grand Order @wiki.*$/i, '')
+        .replace(/\s*-\s*atwiki.*$/i, '');
+    }
+
+    // 本文全体の「No.1」検索は禁止。メニューのLostbelt No.1等を誤取得するため、
+    // サーヴァント本文の No.### 見出しを優先して取得する。
+    const noHeading = [...doc.querySelectorAll('h2,h3,h4,h5')]
+      .map(h => normalizeText(h.textContent || ''))
+      .find(text => /^No\.\s*\d{1,3}$/i.test(text));
+    if (noHeading) {
+      const match = noHeading.match(/^No\.\s*(\d{1,3})$/i);
+      if (match) no = match[1].padStart(3, '0');
+    }
+
+    // 見出しがないページ向けに、真名/Class/Rareを含む基本情報表だけを見る。
+    if (!no) {
+      for (const tr of doc.querySelectorAll('tr')) {
+        const text = normalizeText(tr.textContent || '');
+        if (!/真名/.test(text) && !/Class/.test(text) && !/Rare/.test(text)) continue;
+        const match = text.match(/(?:^|\s)No\.\s*(\d{1,3})(?:\s|$)/i);
+        if (match) {
+          no = match[1].padStart(3, '0');
+          break;
+        }
+      }
+    }
+
+    return {
+      ...base,
+      name:name || base.name,
+      no:no || base.no
+    };
+  }
+
+  async function parseServantBySource(item) {
+    const html = await fetchText(item.url);
+    const doc = parseHtml(html);
+    const meta = item.source === 'official'
+      ? parseOfficialMetadata(doc, item.url)
+      : parseMetadata(doc, item.url);
+    const blocks = collectAbilityBlocks(doc);
+    if (!blocks.length) throw new Error('スキル・宝具欄を検出できませんでした。');
+    return { ...analyzeRecord(meta, item.url, blocks), source:item.source };
+  }
+
+  loadAllData = async function(force=false) {
+    if (state.loading) return;
+    if (!force && state.records.length) return;
+    state.loading = true;
+    state.elements.loadButton.disabled = true;
+    state.elements.refreshButton.disabled = true;
+    state.elements.searchButton.disabled = true;
+    state.failures = [];
+    try {
+      setStatus('オリジナル・公式サーヴァント一覧を取得しています…');
+      setProgress(0, 0);
+      const [originalHtml, officialHtml] = await Promise.all([
+        fetchText(INDEX_URL),
+        fetchText(OFFICIAL_INDEX_URL),
+        loadTraitCatalog()
+      ]);
+      const originalUrls = extractServantLinksBySource(parseHtml(originalHtml), 'original');
+      const officialUrls = extractServantLinksBySource(parseHtml(officialHtml), 'official');
+      const items = [
+        ...originalUrls.map(url => ({ url, source:'original' })),
+        ...officialUrls.map(url => ({ url, source:'official' }))
+      ];
+      if (!items.length) throw new Error('サーヴァントURLを取得できませんでした。');
+
+      setStatus(`オリジナル ${originalUrls.length}騎 / 公式 ${officialUrls.length}騎を読み込んでいます…`);
+      const results = await mapWithConcurrency(items, FETCH_CONCURRENCY, parseServantBySource, (done,total) => {
+        setProgress(done,total);
+        setStatus(`サーヴァントデータ読込中：${done} / ${total}`);
+      });
+      state.records = results.filter(r => r && !r.__error);
+      state.failures = results.filter(r => r?.__error);
+      state.loadedAt = Date.now();
+      renderTraitOptions();
+      saveCache();
+
+      const originalCount = state.records.filter(r => r.source === 'original').length;
+      const officialCount = state.records.filter(r => r.source === 'official').length;
+      const failureText = state.failures.length ? ` / 読込失敗 ${state.failures.length}件` : '';
+      setStatus(`読込完了：オリジナル ${originalCount}騎 / 公式 ${officialCount}騎${failureText}`, state.failures.length ? 'warn' : 'ok');
+      renderResults(searchRecords());
+    } catch (error) {
+      console.error('[Ra_FGOEffectFilter]', error);
+      setStatus(`読込エラー：${error?.message || error}`, 'error');
+    } finally {
+      state.loading = false;
+      state.elements.loadButton.disabled = false;
+      state.elements.refreshButton.disabled = false;
+      state.elements.searchButton.disabled = false;
+    }
+  };
+
+  const searchRecords_v136 = searchRecords;
+  searchRecords = function() {
+    const matches = searchRecords_v136();
+    const sourceMode = state.elements.root?.querySelector('input[name="ra-source-mode"]:checked')?.value || 'both';
+    if (sourceMode === 'both') return matches;
+    return matches.filter(({record}) => (record.source || 'original') === sourceMode);
+  };
+
+  const renderResults_v136 = renderResults;
+  renderResults = function(matches) {
+    renderResults_v136(matches);
+    const recordByUrl = new Map(matches.map(({record}) => [record.url, record]));
+    for (const card of state.elements.results?.querySelectorAll?.('.ra-result-card') || []) {
+      const link = card.querySelector('.ra-result-title a[href]');
+      if (!link) continue;
+      const record = recordByUrl.get(link.href);
+      if (!record || card.querySelector('.ra-source-badge')) continue;
+      const badge = document.createElement('span');
+      badge.className = `ra-source-badge is-${record.source === 'official' ? 'official' : 'original'}`;
+      badge.textContent = sourceLabel(record.source);
+      link.parentNode.insertBefore(badge, link);
+    }
+  };
+
+  const clearFilters_v136 = clearFilters;
+  clearFilters = function() {
+    const both = state.elements.root?.querySelector('input[name="ra-source-mode"][value="both"]');
+    if (both) both.checked = true;
+    clearFilters_v136();
+  };
+
+  const createUI_v136 = createUI;
+  createUI = function() {
+    const root = createUI_v136();
+    const keywordRow = state.elements.keyword?.closest?.('.ra-row');
+    if (keywordRow && !root.querySelector('input[name="ra-source-mode"]')) {
+      const row = document.createElement('div');
+      row.className = 'ra-row ra-source-filter-row';
+      row.innerHTML = `<span class="ra-label">収録範囲</span>
+        <label class="ra-chip"><input type="radio" name="ra-source-mode" value="original"><span>オリジナルのみ</span></label>
+        <label class="ra-chip"><input type="radio" name="ra-source-mode" value="official"><span>公式のみ</span></label>
+        <label class="ra-chip"><input type="radio" name="ra-source-mode" value="both" checked><span>オリジナル＋公式</span></label>`;
+      keywordRow.parentNode.insertBefore(row, keywordRow);
+      row.querySelectorAll('input[name="ra-source-mode"]').forEach(el => {
+        el.addEventListener('change', () => {
+          if (state.records.length) renderResults(searchRecords());
+        });
+      });
+    }
+
+    const style = root.querySelector('style');
+    if (style) style.textContent += `
+      #ra-fgo-effect-filter .ra-source-badge{display:inline-flex;align-items:center;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:700;line-height:1.5;border:1px solid #c8ced6;background:#fff;color:#4c5968}
+      #ra-fgo-effect-filter .ra-source-badge.is-official{background:#eef3ff;border-color:#aebfe4;color:#294c91}
+      #ra-fgo-effect-filter .ra-source-badge.is-original{background:#f6f1ff;border-color:#c9b7e7;color:#60438c}`;
+
+    const note = root.querySelector('.ra-panel .ra-note');
+    if (note) note.textContent = 'オリジナルWikiとFate/Grand Order @wikiの個別サーヴァントページから「保有スキル」「宝具」「クラススキル」を自動読取します。初回読込後はブラウザに24時間キャッシュします。';
+    return root;
+  };
