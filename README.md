@@ -5,14 +5,14 @@
 - 対象Wiki: https://w.atwiki.jp/siroi_human/
 - 特性分類参考: https://w.atwiki.jp/siroi_human/pages/427.html
 - Author: argyi
-- Version: 1.3.7
+- Version: 1.3.8
 
 ## @wikiへの設置
 
 検索ページを「管理者のみ編集可能」に設定し、本文へ次の1行を記述してください。
 
 ```text
-#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@36b4739056c8319d5fe98ddaf3ab364fcb1a3843/Ra_FGOEffectFilter.js)
+#include_js(https://cdn.jsdelivr.net/gh/siroihuman/FGO_Effect_Filter@1556faa57b632d0b236e5e1dc8a8b2049cd69dbf/Ra_FGOEffectFilter.js)
 ```
 
 `@main` はCDNキャッシュにより更新が遅れる場合があるため、動作確認済みコミットを直接指定します。
@@ -64,6 +64,13 @@ Skill4以降・独立した宝具2以降の効果だけを持つサーヴァン�
 - 再臨段階で変化する特性は基本特性名で検索し、結果に適用段階を注記します。
 
 ## 更新履歴
+
+### v1.3.8
+
+- 公式サーヴァントの真名がサイト名「Fate/Grand Order @wiki 【FGO】」になる不具合を修正
+- 公式サーヴァントのNoがメニュー中の Lostbelt No.1 等を拾う不具合を修正
+- 公式の真名は基本情報表の「真名」を最優先し、ページ固有h2、document.titleの順でフォールバック
+- 公式のNoはサーヴァント本文の `No.###` 見出しを優先して取得し、3桁表記に統一
 
 ### v1.3.7
 
